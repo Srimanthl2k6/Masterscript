@@ -1,0 +1,657 @@
+{
+  "metadata": {
+    "title": "MasterScript Competitive Parity Matrix",
+    "generatedBy": "parity generator",
+    "scope": "initial implementation slice",
+    "productKeys": ["celtx", "kit_scenarist", "final_draft"],
+    "productLabels": {
+      "celtx": "Celtx",
+      "kit_scenarist": "Kit Scenarist",
+      "final_draft": "Final Draft"
+    },
+    "productEvidenceDefaults": {
+      "celtx": [
+        "https://www.celtx.com/scriptwriting/",
+        "https://www.celtx.com/pre-production/",
+        "https://support.celtx.com/hc/en-us",
+        "https://www.softwareadvice.com/screenwriting/celtx-profile/"
+      ],
+      "kit_scenarist": [
+        "https://kitscenarist.ru/en/index.html",
+        "https://kitscenarist.ru/en/help/",
+        "https://kitscenarist.ru/en/history.html"
+      ],
+      "final_draft": [
+        "https://www.finaldraft.com/",
+        "https://kb.finaldraft.com/",
+        "https://www.softwareadvice.com/screenwriting/final-draft-profile/"
+      ]
+    }
+  },
+  "features": [
+    {
+      "id": "writing.block_editing",
+      "domain": "Writing",
+      "name": "Block-based screenplay editing",
+      "masterscriptStatus": "present",
+      "gapSeverity": "none",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/types/screenplay.ts (BlockType enum)",
+        "src/lib/screenplay.ts (nextTypeForEnter, cycleBlockType)",
+        "src/App.tsx (onBlockTextChange, onBlockTypeChange)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "writing.undo_redo",
+      "domain": "Writing",
+      "name": "Undo and redo history",
+      "masterscriptStatus": "present",
+      "gapSeverity": "none",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/App.tsx (undo, redo, history stack)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "writing.command_palette",
+      "domain": "Writing",
+      "name": "Cross-module command palette",
+      "masterscriptStatus": "present",
+      "gapSeverity": "none",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/components/CommandPalette.tsx",
+        "src/App.tsx (palette command routing)"
+      ],
+      "competitorSupport": {
+        "celtx": "partial",
+        "kit_scenarist": "partial",
+        "final_draft": "partial"
+      }
+    },
+    {
+      "id": "planning.story_templates",
+      "domain": "Planning",
+      "name": "Story structure templates",
+      "masterscriptStatus": "present",
+      "gapSeverity": "none",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/lib/planningTemplates.ts (Three Act, Hero's Journey, Eight Sequence)",
+        "src/App.tsx (template apply actions)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "production.schedule_crud",
+      "domain": "Production",
+      "name": "Production schedule CRUD",
+      "masterscriptStatus": "present",
+      "gapSeverity": "none",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/App.tsx (addScheduleEntry, updateScheduleEntry, removeScheduleEntry)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "not_evident",
+        "final_draft": "partial"
+      }
+    },
+    {
+      "id": "production.day_out_of_days",
+      "domain": "Production",
+      "name": "Day-out-of-days report generation",
+      "masterscriptStatus": "present",
+      "gapSeverity": "none",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/lib/screenplay.ts (buildDayOutOfDaysReport)",
+        "src/App.tsx (exportDayOutOfDays action)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "not_evident",
+        "final_draft": "partial"
+      }
+    },
+    {
+      "id": "io.fountain_export",
+      "domain": "ImportExport",
+      "name": "Fountain export",
+      "masterscriptStatus": "present",
+      "gapSeverity": "none",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/lib/screenplay.ts (toFountain)",
+        "src/App.tsx (export action)"
+      ],
+      "competitorSupport": {
+        "celtx": "partial",
+        "kit_scenarist": "supported",
+        "final_draft": "partial"
+      }
+    },
+    {
+      "id": "io.fdx_basic_roundtrip",
+      "domain": "ImportExport",
+      "name": "Basic FDX import and export",
+      "masterscriptStatus": "present",
+      "gapSeverity": "none",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/lib/adapters/fdx.ts",
+        "src/lib/adapters.test.ts"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "io.docx_basic_roundtrip",
+      "domain": "ImportExport",
+      "name": "Basic DOCX import and export",
+      "masterscriptStatus": "present",
+      "gapSeverity": "none",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/lib/adapters/docx.ts",
+        "src/lib/adapters.test.ts"
+      ],
+      "competitorSupport": {
+        "celtx": "partial",
+        "kit_scenarist": "supported",
+        "final_draft": "partial"
+      }
+    },
+    {
+      "id": "persistence.local_autosave",
+      "domain": "Persistence",
+      "name": "Local autosave and restore",
+      "masterscriptStatus": "present",
+      "gapSeverity": "none",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/App.tsx (autosave state and restore)",
+        "electron/main.cjs (project:autosave handler)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "revision.color_marks",
+      "domain": "Revision",
+      "name": "Revision color markings",
+      "masterscriptStatus": "present",
+      "gapSeverity": "none",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/types/screenplay.ts (RevisionColor, revisionColors)",
+        "src/App.tsx (setBlockRevision, clearRevisionColor)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "partial",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "catalog.auto_detection",
+      "domain": "Catalog",
+      "name": "Automatic character and location detection",
+      "masterscriptStatus": "present",
+      "gapSeverity": "none",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/lib/screenplay.ts (detectCatalogEntries)",
+        "src/App.tsx (importDetectedCatalog)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "writing.page_layout_preview",
+      "domain": "Writing",
+      "name": "Page-aware screenplay preview",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "high",
+      "confidence": "high",
+      "dependencies": ["writing.block_editing"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/App.tsx (single-column editor rendering)",
+        "src/components (no page preview component)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "writing.find_replace",
+      "domain": "Writing",
+      "name": "Find and replace",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "high",
+      "confidence": "high",
+      "dependencies": ["writing.command_palette"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/components/CommandPalette.tsx (search only, no replace)",
+        "src/App.tsx (no replace action path)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "writing.scene_numbering",
+      "domain": "Writing",
+      "name": "Automatic scene numbering",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "high",
+      "confidence": "medium",
+      "dependencies": ["writing.block_editing"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/types/screenplay.ts (SceneSummary has no persistent number)",
+        "src/lib/screenplay.ts (extractScenes without scene index persistence)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "partial",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "writing.character_autocomplete",
+      "domain": "Writing",
+      "name": "Character autocomplete from cast list",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "medium",
+      "confidence": "medium",
+      "dependencies": ["catalog.auto_detection"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/App.tsx (character block editing has no suggestion source)"
+      ],
+      "competitorSupport": {
+        "celtx": "partial",
+        "kit_scenarist": "partial",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "production.call_sheet_generation",
+      "domain": "Production",
+      "name": "Call sheet generation",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "critical",
+      "confidence": "high",
+      "dependencies": ["production.schedule_crud", "catalog.auto_detection"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/types/screenplay.ts (no call sheet model)",
+        "src/App.tsx (no call sheet generator/export action)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "not_evident",
+        "final_draft": "partial"
+      }
+    },
+    {
+      "id": "production.props_equipment_extraction",
+      "domain": "Production",
+      "name": "Automatic props and equipment extraction",
+      "masterscriptStatus": "partial",
+      "gapSeverity": "high",
+      "confidence": "high",
+      "dependencies": ["production.schedule_crud"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/types/screenplay.ts (BreakdownKind includes prop and equipment)",
+        "src/lib/screenplay.ts (generateProductionBreakdown currently extracts cast and location only)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "partial",
+        "final_draft": "partial"
+      }
+    },
+    {
+      "id": "collaboration.realtime_coauthoring",
+      "domain": "Collaboration",
+      "name": "Real-time co-authoring",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "critical",
+      "confidence": "high",
+      "dependencies": ["persistence.cloud_sync"],
+      "byDesign": false,
+      "masterEvidence": [
+        "README.md (cloud sync intentionally out of scope)",
+        "src/types/screenplay.ts (no user/session collaborator model)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "collaboration.comments_mentions",
+      "domain": "Collaboration",
+      "name": "Inline comments and mentions",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "high",
+      "confidence": "high",
+      "dependencies": ["collaboration.realtime_coauthoring"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/types/screenplay.ts (no comment entity)",
+        "src/App.tsx (no comment UI)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "partial",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "revision.side_by_side_diff",
+      "domain": "Revision",
+      "name": "Side-by-side revision diff",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "high",
+      "confidence": "high",
+      "dependencies": ["revision.snapshot_history"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/App.tsx (single-document view only)",
+        "src/types/screenplay.ts (no diff snapshot model)"
+      ],
+      "competitorSupport": {
+        "celtx": "partial",
+        "kit_scenarist": "not_evident",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "revision.snapshot_history",
+      "domain": "Revision",
+      "name": "Dated revision snapshot history",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "high",
+      "confidence": "high",
+      "dependencies": ["persistence.local_autosave"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/App.tsx (undo history only, no persisted snapshots)",
+        "src/types/screenplay.ts (no snapshot metadata)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "partial"
+      }
+    },
+    {
+      "id": "reporting.analytics_dashboard",
+      "domain": "Reporting",
+      "name": "Script analytics dashboard",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "high",
+      "confidence": "high",
+      "dependencies": ["writing.block_editing"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/lib/screenplay.ts (basic stats only)",
+        "src/App.tsx (no dashboard tab)"
+      ],
+      "competitorSupport": {
+        "celtx": "partial",
+        "kit_scenarist": "supported",
+        "final_draft": "partial"
+      }
+    },
+    {
+      "id": "reporting.character_dialogue_report",
+      "domain": "Reporting",
+      "name": "Character and dialogue reports",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "high",
+      "confidence": "medium",
+      "dependencies": ["catalog.auto_detection"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/lib/screenplay.ts (no dialogue report utility)",
+        "src/App.tsx (no report export action for characters)"
+      ],
+      "competitorSupport": {
+        "celtx": "partial",
+        "kit_scenarist": "partial",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "io.pdf_export",
+      "domain": "ImportExport",
+      "name": "PDF export",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "critical",
+      "confidence": "high",
+      "dependencies": ["writing.page_layout_preview"],
+      "byDesign": false,
+      "masterEvidence": [
+        "package.json (no PDF generation dependency)",
+        "electron/main.cjs (no PDF export IPC handler)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "io.docx_style_fidelity",
+      "domain": "ImportExport",
+      "name": "DOCX style-fidelity roundtrip",
+      "masterscriptStatus": "partial",
+      "gapSeverity": "high",
+      "confidence": "high",
+      "dependencies": ["io.docx_basic_roundtrip"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/lib/adapters/docx.ts (normalization to block-level only)",
+        "src/lib/adapters/normalize.ts (warning-oriented lossy mapping)"
+      ],
+      "competitorSupport": {
+        "celtx": "partial",
+        "kit_scenarist": "partial",
+        "final_draft": "partial"
+      }
+    },
+    {
+      "id": "budget.variance_tracking",
+      "domain": "Budget",
+      "name": "Estimate versus actual variance tracking",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "high",
+      "confidence": "high",
+      "dependencies": ["production.schedule_crud"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/types/screenplay.ts (BudgetItem has only category, description, amount)",
+        "src/App.tsx (budget module totals only)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "not_evident",
+        "final_draft": "partial"
+      }
+    },
+    {
+      "id": "storyboard.image_upload",
+      "domain": "Storyboard",
+      "name": "Storyboard image upload and preview",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "high",
+      "confidence": "high",
+      "dependencies": ["storyboard.panel_crud"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/types/screenplay.ts (StoryboardPanel has no image field)",
+        "src/App.tsx (storyboard UI text fields only)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "partial",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "catalog.character_profiles",
+      "domain": "Catalog",
+      "name": "Character profiles with attributes",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "medium",
+      "confidence": "high",
+      "dependencies": ["catalog.auto_detection"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/types/screenplay.ts (CatalogEntry has only kind, name, notes)",
+        "src/App.tsx (catalog table has no structured profile fields)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "partial"
+      }
+    },
+    {
+      "id": "general.scene_tagging",
+      "domain": "General",
+      "name": "Scene tagging and filters",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "medium",
+      "confidence": "medium",
+      "dependencies": ["writing.scene_numbering"],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/types/screenplay.ts (no scene tag model)",
+        "src/App.tsx (no scene filter by custom tags)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "partial",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "general.light_theme_toggle",
+      "domain": "General",
+      "name": "Light and dark theme toggle",
+      "masterscriptStatus": "partial",
+      "gapSeverity": "low",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src/index.css and src/App.css (single cinematic dark styling path)",
+        "src/App.tsx (no theme preference control)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "persistence.cloud_sync",
+      "domain": "Persistence",
+      "name": "Cloud sync and multi-device continuity",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "high",
+      "confidence": "high",
+      "dependencies": [],
+      "byDesign": true,
+      "masterEvidence": [
+        "README.md (cloud sync intentionally out of scope)",
+        "electron/main.cjs (local filesystem and autosave only)"
+      ],
+      "competitorSupport": {
+        "celtx": "supported",
+        "kit_scenarist": "supported",
+        "final_draft": "supported"
+      }
+    },
+    {
+      "id": "general.plugin_system",
+      "domain": "General",
+      "name": "Plugin and extension system",
+      "masterscriptStatus": "missing",
+      "gapSeverity": "low",
+      "confidence": "low",
+      "dependencies": [],
+      "byDesign": false,
+      "masterEvidence": [
+        "src and electron folders (no extension API, no plugin loader)"
+      ],
+      "competitorSupport": {
+        "celtx": "not_evident",
+        "kit_scenarist": "not_evident",
+        "final_draft": "not_evident"
+      }
+    }
+  ]
+}
