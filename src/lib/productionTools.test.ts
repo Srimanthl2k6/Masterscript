@@ -133,7 +133,9 @@ describe('production tools', () => {
   })
 
   it('tracks per-scene shot lists and storyboard export labels', () => {
-    let { project, sceneA } = buildProductionProject()
+    const productionProject = buildProductionProject()
+    let { project } = productionProject
+    const { sceneA } = productionProject
 
     project = addShotToScene(project, sceneA.id, {
       shotNumber: '1A',

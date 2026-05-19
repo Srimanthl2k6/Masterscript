@@ -176,6 +176,22 @@ button:focus-visible {
   gap: 0.5rem;
 }
 
+.download-btn {
+  padding: 0.42rem 0.95rem;
+  border-radius: var(--radius-sm);
+  color: #101010;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  background: #f4f1ea;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.download-btn:hover {
+  transform: translateY(-1px);
+  background: #ffffff;
+}
+
 .home-recent {
   border-top: 1px solid var(--border-soft);
   padding-top: 0.9rem;
@@ -2516,8 +2532,10 @@ kbd {
   }
 
   .home-actions .ghost-btn,
-  .home-actions .share-btn {
+  .home-actions .share-btn,
+  .home-actions .download-btn {
     width: 100%;
+    text-align: center;
   }
 
   .app-header {

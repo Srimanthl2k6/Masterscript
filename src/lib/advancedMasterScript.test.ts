@@ -202,7 +202,9 @@ describe('advanced MasterScript feature suite', () => {
   })
 
   it('models locked page physics, script coordinator exports, cast status, sides, one-liner, timing, and navigator enhancements', () => {
-    let { project, sceneA } = buildAdvancedProject()
+    const advancedProject = buildAdvancedProject()
+    let { project } = advancedProject
+    const { sceneA } = advancedProject
     project = assignProductionSceneNumbers(project)
     project.advanced.castStatuses.MAYA = 'Series Regular'
     project.advanced.castStatuses.GUARD = 'Under-5'

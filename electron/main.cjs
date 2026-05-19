@@ -1,6 +1,8 @@
 const { app, BrowserWindow, dialog, ipcMain } = require('electron')
+const { autoUpdater } = require('electron-updater')
 const fs = require('node:fs/promises')
 const path = require('node:path')
+const { configureAutoUpdates } = require('./auto-updater.cjs')
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL)
 
@@ -222,6 +224,7 @@ ipcMain.handle('project:export-pdf', async (_event, payload) => {
 
 app.whenReady().then(() => {
   createMainWindow()
+  void configureAutoUpdates({ autoUpdater, isDev }).checkForUpdates()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

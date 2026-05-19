@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent } from 'react'
 import CommandPalette, { type CommandResult } from './components/CommandPalette'
+import { MASTER_SCRIPT_DOWNLOAD_URL } from './lib/download'
 import {
   exportProjectToDocx,
   exportProjectToFdx,
@@ -4722,6 +4723,14 @@ function App() {
             </p>
 
             <div className="home-actions">
+              <a
+                className="download-btn"
+                href={MASTER_SCRIPT_DOWNLOAD_URL}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                Download Windows App
+              </a>
               <button className="share-btn" onClick={createNewProject}>
                 New Project
               </button>

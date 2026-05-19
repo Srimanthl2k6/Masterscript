@@ -81,7 +81,7 @@ describe('revision and production mode helpers', () => {
   })
 
   it('stashes selected dialogue and swaps it back into a dialogue block', () => {
-    let project = createEmptyProject()
+    const project = createEmptyProject()
     const dialogue = createBlock('dialogue', 'Keep this alternate line for later.')
     project.blocks = [dialogue]
 
