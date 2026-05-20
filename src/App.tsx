@@ -7069,337 +7069,339 @@ function App() {
             </button>
           </div>
 
-          {activeTab === 'draft' && !useContinuousDraftEditor && (
-            <section className="outline-tools writer-flow-panel">
-              <div className="current-element-card">
-                <span>Current Element</span>
-                <strong>
-                  {activeEditorBlock
-                    ? blockTypeLabels[activeEditorBlock.type]
-                    : 'Scene Heading'}
-                </strong>
-              </div>
+          <div className="right-outline-scroll">
+            {activeTab === 'draft' && !useContinuousDraftEditor && (
+              <section className="outline-tools writer-flow-panel">
+                <div className="current-element-card">
+                  <span>Current Element</span>
+                  <strong>
+                    {activeEditorBlock
+                      ? blockTypeLabels[activeEditorBlock.type]
+                      : 'Scene Heading'}
+                  </strong>
+                </div>
 
-              <div className="keyboard-hint-list">
-                <div>
-                  <kbd>Enter</kbd>
-                  <span>Next screenplay block</span>
+                <div className="keyboard-hint-list">
+                  <div>
+                    <kbd>Enter</kbd>
+                    <span>Next screenplay block</span>
+                  </div>
+                  <div>
+                    <kbd>Shift</kbd>
+                    <kbd>Enter</kbd>
+                    <span>New line in current block</span>
+                  </div>
+                  <div>
+                    <kbd>Tab</kbd>
+                    <span>
+                      Cycle type: {screenplayKeyboardCycle.map((type) => blockTypeLabels[type]).join(' / ')}
+                    </span>
+                  </div>
+                  <div>
+                    <kbd>Shift</kbd>
+                    <kbd>Tab</kbd>
+                    <span>Cycle backward</span>
+                  </div>
                 </div>
-                <div>
-                  <kbd>Shift</kbd>
-                  <kbd>Enter</kbd>
-                  <span>New line in current block</span>
-                </div>
-                <div>
-                  <kbd>Tab</kbd>
-                  <span>
-                    Cycle type: {screenplayKeyboardCycle.map((type) => blockTypeLabels[type]).join(' / ')}
-                  </span>
-                </div>
-                <div>
-                  <kbd>Shift</kbd>
-                  <kbd>Tab</kbd>
-                  <span>Cycle backward</span>
-                </div>
-              </div>
 
-              <div className="shortcut-grid">
-                {screenplayElementShortcuts.map((item) => (
-                  <span key={item.type}>
-                    <kbd>{item.shortcut}</kbd>
-                    {blockTypeLabels[item.type]}
-                  </span>
-                ))}
-              </div>
-
-              <details className="shortcut-remap-panel">
-                <summary>Remap shortcuts</summary>
-                <div className="shortcut-remap-list">
+                <div className="shortcut-grid">
                   {screenplayElementShortcuts.map((item) => (
-                    <label key={`remap-${item.type}`}>
-                      <span>{blockTypeLabels[item.type]}</span>
-                      <input
-                        value={item.shortcut}
-                        readOnly
-                        onKeyDown={(event) => captureEditorShortcut(event, item.type)}
-                        onFocus={(event) => event.currentTarget.select()}
-                        aria-label={`Shortcut for ${blockTypeLabels[item.type]}`}
-                      />
-                    </label>
+                    <span key={item.type}>
+                      <kbd>{item.shortcut}</kbd>
+                      {blockTypeLabels[item.type]}
+                    </span>
                   ))}
                 </div>
-                <button className="subtle-action" onClick={resetEditorShortcuts}>
-                  Reset defaults
-                </button>
-              </details>
 
-              <details className="block-actions-panel">
-                <summary>Block actions</summary>
-                <div className="inline-actions">
-                  <button
-                    onClick={() => {
-                      if (activeBlockId) {
-                        markRevision(activeBlockId)
-                      }
-                    }}
-                    disabled={!project.meta.revisionMode || !activeBlockId}
-                  >
-                    Mark Revision
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (activeEditorBlock && activeBlockIndex >= 0) {
-                        addBlockAfter(
-                          activeBlockIndex,
-                          nextTypeForEnter(activeEditorBlock.type),
-                        )
-                      }
-                    }}
-                    disabled={!activeEditorBlock || activeBlockIndex < 0}
-                  >
-                    Insert Next
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (activeBlockId) {
-                        removeBlock(activeBlockId)
-                      }
-                    }}
-                    disabled={!activeBlockId || project.blocks.length === 1}
-                  >
-                    Delete Block
-                  </button>
-                </div>
-              </details>
-
-              <details className="smarttype-panel compact-smarttype">
-                <summary>SmartType suggestions</summary>
-                {smartTypeGroups.map((group) => (
-                  <div className="smarttype-group" key={group.label}>
-                    <span>{group.label}</span>
-                    <div>
-                      {group.values.slice(0, 5).map((value) => (
-                        <button
-                          key={`${group.label}-${value}`}
-                          onClick={() => insertTextIntoActiveBlock(value)}
-                        >
-                          {value}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </details>
-            </section>
-          )}
-
-          {activeTab === 'draft' && useContinuousDraftEditor && (
-            <section className="outline-tools continuous-controls-pane">
-              <div className="continuous-draft-controls">
-                <label>
-                  <span>Enter Inserts</span>
-                  <select
-                    value={continuousEnterType}
-                    onChange={(event) => {
-                      const nextType = event.target.value as BlockType
-                      setContinuousEnterType(nextType)
-                      setStatusMessage(`Enter now inserts ${blockTypeLabels[nextType]}`)
-                    }}
-                  >
-                    {blockTypeOrder.map((type) => (
-                      <option key={type} value={type}>
-                        {blockTypeLabels[type]}
-                      </option>
+                <details className="shortcut-remap-panel">
+                  <summary>Remap shortcuts</summary>
+                  <div className="shortcut-remap-list">
+                    {screenplayElementShortcuts.map((item) => (
+                      <label key={`remap-${item.type}`}>
+                        <span>{blockTypeLabels[item.type]}</span>
+                        <input
+                          value={item.shortcut}
+                          readOnly
+                          onKeyDown={(event) => captureEditorShortcut(event, item.type)}
+                          onFocus={(event) => event.currentTarget.select()}
+                          aria-label={`Shortcut for ${blockTypeLabels[item.type]}`}
+                        />
+                      </label>
                     ))}
-                  </select>
-                </label>
-                <p className="small-copy">
-                  Enter inserts the selected line type. Shift+Enter inserts a plain newline. Tab or
-                  Alt+Up/Down cycles types.
-                </p>
-              </div>
-              <div className="smarttype-panel">
-                <div className="smarttype-header">
-                  <strong>SmartType</strong>
-                  <button onClick={markRecentDialogueAsDual}>Dual Last Dialogue</button>
-                </div>
-                {smartTypeGroups.map((group) => (
-                  <div className="smarttype-group" key={group.label}>
-                    <span>{group.label}</span>
-                    <div>
-                      {group.values.slice(0, 8).map((value) => (
-                        <button
-                          key={`${group.label}-${value}`}
-                          onClick={() => insertContinuousTextAtCursor(value)}
-                        >
-                          {value}
-                        </button>
-                      ))}
-                    </div>
                   </div>
+                  <button className="subtle-action" onClick={resetEditorShortcuts}>
+                    Reset defaults
+                  </button>
+                </details>
+
+                <details className="block-actions-panel">
+                  <summary>Block actions</summary>
+                  <div className="inline-actions">
+                    <button
+                      onClick={() => {
+                        if (activeBlockId) {
+                          markRevision(activeBlockId)
+                        }
+                      }}
+                      disabled={!project.meta.revisionMode || !activeBlockId}
+                    >
+                      Mark Revision
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (activeEditorBlock && activeBlockIndex >= 0) {
+                          addBlockAfter(
+                            activeBlockIndex,
+                            nextTypeForEnter(activeEditorBlock.type),
+                          )
+                        }
+                      }}
+                      disabled={!activeEditorBlock || activeBlockIndex < 0}
+                    >
+                      Insert Next
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (activeBlockId) {
+                          removeBlock(activeBlockId)
+                        }
+                      }}
+                      disabled={!activeBlockId || project.blocks.length === 1}
+                    >
+                      Delete Block
+                    </button>
+                  </div>
+                </details>
+
+                <details className="smarttype-panel compact-smarttype">
+                  <summary>SmartType suggestions</summary>
+                  {smartTypeGroups.map((group) => (
+                    <div className="smarttype-group" key={group.label}>
+                      <span>{group.label}</span>
+                      <div>
+                        {group.values.slice(0, 5).map((value) => (
+                          <button
+                            key={`${group.label}-${value}`}
+                            onClick={() => insertTextIntoActiveBlock(value)}
+                          >
+                            {value}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </details>
+              </section>
+            )}
+
+            {activeTab === 'draft' && useContinuousDraftEditor && (
+              <section className="outline-tools continuous-controls-pane">
+                <div className="continuous-draft-controls">
+                  <label>
+                    <span>Enter Inserts</span>
+                    <select
+                      value={continuousEnterType}
+                      onChange={(event) => {
+                        const nextType = event.target.value as BlockType
+                        setContinuousEnterType(nextType)
+                        setStatusMessage(`Enter now inserts ${blockTypeLabels[nextType]}`)
+                      }}
+                    >
+                      {blockTypeOrder.map((type) => (
+                        <option key={type} value={type}>
+                          {blockTypeLabels[type]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <p className="small-copy">
+                    Enter inserts the selected line type. Shift+Enter inserts a plain newline. Tab or
+                    Alt+Up/Down cycles types.
+                  </p>
+                </div>
+                <div className="smarttype-panel">
+                  <div className="smarttype-header">
+                    <strong>SmartType</strong>
+                    <button onClick={markRecentDialogueAsDual}>Dual Last Dialogue</button>
+                  </div>
+                  {smartTypeGroups.map((group) => (
+                    <div className="smarttype-group" key={group.label}>
+                      <span>{group.label}</span>
+                      <div>
+                        {group.values.slice(0, 8).map((value) => (
+                          <button
+                            key={`${group.label}-${value}`}
+                            onClick={() => insertContinuousTextAtCursor(value)}
+                          >
+                            {value}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section
+              className={
+                activeTab === 'draft'
+                  ? 'outline-tools scene-lookup-panel'
+                  : 'outline-tools'
+              }
+            >
+              <label className="outline-search">
+                <span>Find Scene</span>
+                <input
+                  value={sceneFilterQuery}
+                  onChange={(event) => setSceneFilterQuery(event.target.value)}
+                  placeholder="Search by heading or number"
+                />
+              </label>
+
+              {activeTab !== 'draft' && (
+                <>
+                  <div className="outline-stats-grid">
+                    <article className="outline-stat">
+                      <span>Scenes</span>
+                      <strong>{scenes.length}</strong>
+                    </article>
+                    <article className="outline-stat">
+                      <span>Words</span>
+                      <strong>{stats.wordCount}</strong>
+                    </article>
+                    <article className="outline-stat">
+                      <span>Pages</span>
+                      <strong>{stats.estimatedPages}</strong>
+                    </article>
+                    <article className="outline-stat">
+                      <span>Blocks</span>
+                      <strong>{project.blocks.length}</strong>
+                    </article>
+                  </div>
+
+                  <div className="outline-quick-actions">
+                    <button onClick={() => appendSidebarBlock('scene-heading')}>Add Scene</button>
+                    <button onClick={() => appendSidebarBlock('action')}>Add Action</button>
+                    <button onClick={() => setActiveTab('preview')}>Open Preview</button>
+                    <button onClick={() => void exportPdf()}>Export PDF</button>
+                  </div>
+                </>
+              )}
+            </section>
+
+            <nav className="outline-list">
+              {scenes.length === 0 && <p className="small-copy">Add a scene heading to begin.</p>}
+              {scenes.length > 0 && filteredScenes.length === 0 && (
+                <p className="small-copy">No scenes match this filter.</p>
+              )}
+              {filteredScenes.map((scene) => (
+                <button
+                  key={scene.blockId}
+                  className={
+                    scene.blockId === resolvedSelectedSceneId
+                      ? 'outline-item active'
+                      : 'outline-item'
+                  }
+                  style={{
+                    borderLeftColor: storyState.sceneMeta[scene.blockId]?.color ?? undefined,
+                  }}
+                  onClick={() => {
+                    setSelectedSceneId(scene.blockId)
+                    if (activeTab === 'draft') {
+                      setSelectedBlockId(scene.blockId)
+                      queueFocus(scene.blockId)
+                    } else {
+                      jumpToDraft(scene.blockId)
+                    }
+                  }}
+                >
+                  <strong>
+                    SCENE {sceneNumberById.get(scene.blockId) ?? 1}
+                  </strong>
+                  <span>{scene.heading}</span>
+                  {storyState.sceneMeta[scene.blockId]?.actBreak && (
+                    <span>{storyState.sceneMeta[scene.blockId].actBreak}</span>
+                  )}
+                  {storyState.sceneMeta[scene.blockId]?.status && (
+                    <span>{storyState.sceneMeta[scene.blockId].status}</span>
+                  )}
+                </button>
+              ))}
+            </nav>
+
+            <section className="outline-revision">
+              <label className="toggle-row compact">
+                <input
+                  type="checkbox"
+                  checked={project.meta.revisionMode}
+                  onChange={toggleRevisionMode}
+                />
+                <span>Revision Mode</span>
+              </label>
+
+              <div className="revision-chip-grid compact">
+                {revisionColors.map((color) => (
+                  <button
+                    key={color}
+                    className={`revision-chip ${color}${
+                      project.meta.activeRevision === color ? ' active' : ''
+                    }`}
+                    onClick={() => setActiveRevisionColor(color)}
+                  >
+                    <span>{color}</span>
+                    <strong>{revisionCounts[color]}</strong>
+                  </button>
                 ))}
               </div>
-            </section>
-          )}
 
-          <section
-            className={
-              activeTab === 'draft'
-                ? 'outline-tools scene-lookup-panel'
-                : 'outline-tools'
-            }
-          >
-            <label className="outline-search">
-              <span>Find Scene</span>
-              <input
-                value={sceneFilterQuery}
-                onChange={(event) => setSceneFilterQuery(event.target.value)}
-                placeholder="Search by heading or number"
-              />
-            </label>
-
-            {activeTab !== 'draft' && (
-              <>
-                <div className="outline-stats-grid">
-                  <article className="outline-stat">
-                    <span>Scenes</span>
-                    <strong>{scenes.length}</strong>
-                  </article>
-                  <article className="outline-stat">
-                    <span>Words</span>
-                    <strong>{stats.wordCount}</strong>
-                  </article>
-                  <article className="outline-stat">
-                    <span>Pages</span>
-                    <strong>{stats.estimatedPages}</strong>
-                  </article>
-                  <article className="outline-stat">
-                    <span>Blocks</span>
-                    <strong>{project.blocks.length}</strong>
-                  </article>
-                </div>
-
-                <div className="outline-quick-actions">
-                  <button onClick={() => appendSidebarBlock('scene-heading')}>Add Scene</button>
-                  <button onClick={() => appendSidebarBlock('action')}>Add Action</button>
-                  <button onClick={() => setActiveTab('preview')}>Open Preview</button>
-                  <button onClick={() => void exportPdf()}>Export PDF</button>
-                </div>
-              </>
-            )}
-          </section>
-
-          <nav className="outline-list">
-            {scenes.length === 0 && <p className="small-copy">Add a scene heading to begin.</p>}
-            {scenes.length > 0 && filteredScenes.length === 0 && (
-              <p className="small-copy">No scenes match this filter.</p>
-            )}
-            {filteredScenes.map((scene) => (
-              <button
-                key={scene.blockId}
-                className={
-                  scene.blockId === resolvedSelectedSceneId
-                    ? 'outline-item active'
-                    : 'outline-item'
-                }
-                style={{
-                  borderLeftColor: storyState.sceneMeta[scene.blockId]?.color ?? undefined,
-                }}
-                onClick={() => {
-                  setSelectedSceneId(scene.blockId)
-                  if (activeTab === 'draft') {
-                    setSelectedBlockId(scene.blockId)
-                    queueFocus(scene.blockId)
-                  } else {
-                    jumpToDraft(scene.blockId)
-                  }
-                }}
-              >
-                <strong>
-                  SCENE {sceneNumberById.get(scene.blockId) ?? 1}
-                </strong>
-                <span>{scene.heading}</span>
-                {storyState.sceneMeta[scene.blockId]?.actBreak && (
-                  <span>{storyState.sceneMeta[scene.blockId].actBreak}</span>
-                )}
-                {storyState.sceneMeta[scene.blockId]?.status && (
-                  <span>{storyState.sceneMeta[scene.blockId].status}</span>
-                )}
+              <button className="subtle-action" onClick={beginRevisionSet}>
+                Begin Next Revision Set
               </button>
-            ))}
-          </nav>
 
-          <section className="outline-revision">
-            <label className="toggle-row compact">
-              <input
-                type="checkbox"
-                checked={project.meta.revisionMode}
-                onChange={toggleRevisionMode}
-              />
-              <span>Revision Mode</span>
-            </label>
+              <button
+                className="subtle-action"
+                onClick={() => clearRevisionColor(project.meta.activeRevision)}
+              >
+                Clear active marks
+              </button>
 
-            <div className="revision-chip-grid compact">
-              {revisionColors.map((color) => (
-                <button
-                  key={color}
-                  className={`revision-chip ${color}${
-                    project.meta.activeRevision === color ? ' active' : ''
-                  }`}
-                  onClick={() => setActiveRevisionColor(color)}
-                >
-                  <span>{color}</span>
-                  <strong>{revisionCounts[color]}</strong>
-                </button>
-              ))}
-            </div>
+              <div className="inline-actions">
+                <button onClick={saveRevisionSnapshot}>Save Snapshot</button>
+                <button onClick={openSnapshotHistory}>History</button>
+              </div>
 
-            <button className="subtle-action" onClick={beginRevisionSet}>
-              Begin Next Revision Set
-            </button>
+              <div className="inline-actions">
+                <button onClick={lockSelectedScene}>Lock Scene</button>
+                <button onClick={unlockSelectedScene}>Unlock</button>
+              </div>
 
-            <button
-              className="subtle-action"
-              onClick={() => clearRevisionColor(project.meta.activeRevision)}
-            >
-              Clear active marks
-            </button>
+              <div className="inline-actions">
+                <button onClick={omitSelectedScene}>Omit Scene</button>
+                <button onClick={unomitSelectedScene}>Un-omit</button>
+              </div>
 
-            <div className="inline-actions">
-              <button onClick={saveRevisionSnapshot}>Save Snapshot</button>
-              <button onClick={openSnapshotHistory}>History</button>
-            </div>
+              <button className="subtle-action" onClick={stashContinuousSelection}>
+                Stash Highlighted Dialogue
+              </button>
 
-            <div className="inline-actions">
-              <button onClick={lockSelectedScene}>Lock Scene</button>
-              <button onClick={unlockSelectedScene}>Unlock</button>
-            </div>
+              <div className="stash-list">
+                {project.dialogueStash.map((item) => (
+                  <button key={item.id} onClick={() => swapStashIntoFirstDialogue(item.id)}>
+                    <strong>{item.label}</strong>
+                    <span>{item.text}</span>
+                  </button>
+                ))}
+              </div>
 
-            <div className="inline-actions">
-              <button onClick={omitSelectedScene}>Omit Scene</button>
-              <button onClick={unomitSelectedScene}>Un-omit</button>
-            </div>
-
-            <button className="subtle-action" onClick={stashContinuousSelection}>
-              Stash Highlighted Dialogue
-            </button>
-
-            <div className="stash-list">
-              {project.dialogueStash.map((item) => (
-                <button key={item.id} onClick={() => swapStashIntoFirstDialogue(item.id)}>
-                  <strong>{item.label}</strong>
-                  <span>{item.text}</span>
-                </button>
-              ))}
-            </div>
-
-            <p className="small-copy">
-              {project.revisionSnapshots.length} snapshot
-              {project.revisionSnapshots.length === 1 ? '' : 's'} |{' '}
-              {project.revisionDraftSets.length} revision set
-              {project.revisionDraftSets.length === 1 ? '' : 's'}
-            </p>
-          </section>
+              <p className="small-copy">
+                {project.revisionSnapshots.length} snapshot
+                {project.revisionSnapshots.length === 1 ? '' : 's'} |{' '}
+                {project.revisionDraftSets.length} revision set
+                {project.revisionDraftSets.length === 1 ? '' : 's'}
+              </p>
+            </section>
+          </div>
         </aside>
       </div>
 
