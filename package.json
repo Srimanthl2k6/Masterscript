@@ -24,12 +24,14 @@
   "build": {
     "appId": "com.masterscript.desktop",
     "productName": "MasterScript",
+    "icon": "icon.ico",
     "files": [
       "dist/**/*",
       "electron/**/*",
       "package.json"
     ],
     "directories": {
+      "buildResources": "build",
       "output": "release"
     },
     "publish": [
