@@ -1,7 +1,10 @@
 {
   "name": "masterscript",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.1.2",
+  "description": "MasterScript desktop screenwriting suite",
+  "author": "Srimanthl2k6",
+  "license": "UNLICENSED",
   "type": "module",
   "main": "electron/main.cjs",
   "repository": {
@@ -23,9 +26,8 @@
   },
   "build": {
     "appId": "com.masterscript.desktop",
-    "artifactName": "${productName}.Setup.${version}.${ext}",
     "productName": "MasterScript",
-    "icon": "icon.ico",
+    "icon": "icon",
     "files": [
       "dist/**/*",
       "electron/**/*",
@@ -42,9 +44,33 @@
         "repo": "Masterscript"
       }
     ],
+    "toolsets": {
+      "winCodeSign": "1.1.0"
+    },
     "win": {
       "target": "nsis",
-      "signAndEditExecutable": false
+      "icon": "icon.ico",
+      "artifactName": "MasterScript.Setup.${version}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "icon.png",
+      "artifactName": "MasterScript.mac.${version}.${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm",
+        "pacman"
+      ],
+      "icon": "icon.png",
+      "artifactName": "MasterScript.linux.${version}.${arch}.${ext}",
+      "category": "Office",
+      "maintainer": "Srimanthl2k6"
     }
   },
   "dependencies": {
