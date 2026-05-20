@@ -1,4 +1,4 @@
-const downloadReleaseVersion = '0.1.6'
+const downloadReleaseVersion = '0.1.7'
 const releaseBaseUrl =
   `https://github.com/Srimanthl2k6/Masterscript/releases/download/v${downloadReleaseVersion}`
 
