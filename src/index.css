@@ -421,6 +421,27 @@ button:focus-visible {
   position: relative;
 }
 
+.editor-script-page {
+  padding-bottom: 0.95in;
+}
+
+.editor-script-page + .editor-script-page {
+  margin-top: 2rem;
+}
+
+.editor-page-number {
+  position: absolute;
+  right: 0.88in;
+  bottom: 0.35in;
+  min-width: 2ch;
+  color: var(--text-muted);
+  font-size: 10pt;
+  line-height: 1;
+  text-align: right;
+  pointer-events: none;
+  user-select: none;
+}
+
 .continuous-draft-page {
   padding: 2.8rem 2.4rem;
   display: grid;
@@ -2587,6 +2608,15 @@ kbd {
     min-height: 780px;
     width: calc(100vw - 1.2rem);
     padding: 1.1rem 0.85rem;
+  }
+
+  .editor-script-page {
+    padding-bottom: 3rem;
+  }
+
+  .editor-page-number {
+    right: 0.85rem;
+    bottom: 1rem;
   }
 
   .script-input {

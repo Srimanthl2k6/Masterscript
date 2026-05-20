@@ -1,17 +1,10 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent } from 'react'
 import CommandPalette, { type CommandResult } from './components/CommandPalette'
 import { DESKTOP_DOWNLOAD_LINKS, shouldShowDownloadButton } from './lib/download'
-import {
-  exportProjectToDocx,
-  exportProjectToFdx,
-  exportProjectToPdf,
-  importFountainProject,
-  importDocxProject,
-  importFdxProject,
-  paginateProjectForPrint,
-  type AdapterWarning,
-} from './lib/adapters'
+import { paginateProjectForPrint } from './lib/adapters/pagination'
+import type { AdapterWarning } from './lib/adapters/types'
+import { paginateBlocksForEditor } from './lib/editorPagination'
 import {
   buildSmartTypeOptions,
   inferContinuousBlockType,
@@ -1198,6 +1191,14 @@ function App() {
   const detectedCatalog = useMemo(() => detectCatalogEntries(project), [project])
   const printLayout = useMemo(() => paginateProjectForPrint(project), [project])
   const previewPages = printLayout.pages
+  const editorPages = useMemo(
+    () => paginateBlocksForEditor(project, printLayout),
+    [project, printLayout],
+  )
+  const blockIndexById = useMemo(
+    () => new Map(project.blocks.map((block, index) => [block.id, index])),
+    [project.blocks],
+  )
   const previewPageCount = previewPages.length
   const resolvedPreviewPageIndex = Math.min(
     previewPageIndex,
@@ -1662,7 +1663,7 @@ function App() {
     },
   })
 
-  const focusQueuedBlock = () => {
+  const focusQueuedBlock = useCallback(() => {
     const focusId = pendingFocusId.current
     if (!focusId) {
       return
@@ -1685,17 +1686,17 @@ function App() {
     node.setSelectionRange(start, end)
     pendingFocusId.current = null
     pendingBlockSelection.current = null
-  }
+  }, [])
 
-  const queueFocus = (
-    id: string,
-    selection?: Omit<QueuedSelection, 'id'>,
-  ) => {
-    pendingFocusId.current = id
-    pendingBlockSelection.current = selection ? { id, ...selection } : null
-    setHighlightedId(id)
-    window.requestAnimationFrame(focusQueuedBlock)
-  }
+  const queueFocus = useCallback(
+    (id: string, selection?: Omit<QueuedSelection, 'id'>) => {
+      pendingFocusId.current = id
+      pendingBlockSelection.current = selection ? { id, ...selection } : null
+      setHighlightedId(id)
+      window.requestAnimationFrame(focusQueuedBlock)
+    },
+    [focusQueuedBlock],
+  )
 
   const queueScroll = (id: string) => {
     pendingScrollId.current = id
@@ -1868,7 +1869,7 @@ function App() {
       pendingFocusId.current = null
       pendingBlockSelection.current = null
     }
-  }, [project.blocks])
+  }, [focusQueuedBlock, project.blocks])
 
   useEffect(() => {
     if (appView !== 'workspace' || activeTab !== 'draft') {
@@ -1886,7 +1887,7 @@ function App() {
       setSelectedSceneId(firstBlock.id)
     }
     queueFocus(firstBlock.id, { start: 0, end: 0 })
-  }, [activeTab, appView, project.blocks, project.id])
+  }, [activeTab, appView, project.blocks, project.id, queueFocus])
 
   useEffect(() => {
     if (pendingContinuousCursor.current === null) {
@@ -2787,6 +2788,8 @@ function App() {
 
   const importFountain = async () => {
     try {
+      const { importFountainProject } = await import('./lib/adapters/fountain')
+
       if (window.masterscript?.importFountain) {
         const result = await window.masterscript.importFountain()
         if (!result.ok || !result.content) {
@@ -2814,6 +2817,8 @@ function App() {
 
   const importFdx = async () => {
     try {
+      const { importFdxProject } = await import('./lib/adapters/fdx')
+
       if (window.masterscript?.importFdx) {
         const result = await window.masterscript.importFdx()
         if (!result.ok || !result.content) {
@@ -2841,6 +2846,7 @@ function App() {
 
   const exportFdx = async () => {
     try {
+      const { exportProjectToFdx } = await import('./lib/adapters/fdx')
       const xml = exportProjectToFdx(project)
       if (window.masterscript?.exportFdx) {
         const result = await window.masterscript.exportFdx(project.meta.title, xml)
@@ -2861,6 +2867,8 @@ function App() {
 
   const importDocx = async () => {
     try {
+      const { importDocxProject } = await import('./lib/adapters/docx')
+
       if (window.masterscript?.importDocx) {
         const result = await window.masterscript.importDocx()
         if (!result.ok || !result.base64) {
@@ -2888,6 +2896,7 @@ function App() {
 
   const exportDocx = async () => {
     try {
+      const { exportProjectToDocx } = await import('./lib/adapters/docx')
       const output = await exportProjectToDocx(project)
 
       if (window.masterscript?.exportDocx) {
@@ -2914,6 +2923,7 @@ function App() {
 
   const exportPdf = async () => {
     try {
+      const { exportProjectToPdf } = await import('./lib/adapters/pdf')
       const output = await exportProjectToPdf(project)
 
       if (window.masterscript?.exportPdf) {
@@ -3116,20 +3126,23 @@ function App() {
     setStatusMessage(message)
   }
 
-  const applyProductivityProject = (nextProject: ScriptProject, message: string) => {
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: {
-        ...nextProject,
-        meta: {
-          ...nextProject.meta,
-          updatedAt: new Date().toISOString(),
+  const applyProductivityProject = useCallback(
+    (nextProject: ScriptProject, message: string) => {
+      setHistory((previous) => ({
+        past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
+        present: {
+          ...nextProject,
+          meta: {
+            ...nextProject.meta,
+            updatedAt: new Date().toISOString(),
+          },
         },
-      },
-      future: [],
-    }))
-    setStatusMessage(message)
-  }
+        future: [],
+      }))
+      setStatusMessage(message)
+    },
+    [],
+  )
 
   const applyProductionProject = (nextProject: ScriptProject, message: string) => {
     setHistory((previous) => ({
@@ -3225,7 +3238,7 @@ function App() {
     }, 'Sprint timer started')
   }
 
-  const finishSprintTimer = () => {
+  const finishSprintTimer = useCallback(() => {
     const nextProject = logSprintSession(project, {
       minutes: project.productivity.sprints.activeMinutes,
       wordsStarted: sprintStartWords,
@@ -3234,7 +3247,7 @@ function App() {
     })
     applyProductivityProject(nextProject, 'Sprint session logged')
     setSprintStartWords(stats.wordCount)
-  }
+  }, [applyProductivityProject, project, sprintStartWords, stats.wordCount])
 
   const logWritingToday = () => {
     const today = new Date().toISOString().slice(0, 10)
@@ -3373,6 +3386,7 @@ function App() {
       window.clearTimeout(timer)
     }
   }, [
+    finishSprintTimer,
     productivityState.sprints.isRunning,
     productivityState.sprints.remainingSeconds,
   ])
@@ -3796,6 +3810,7 @@ function App() {
   }
 
   const exportCleanPdf = async () => {
+    const { exportProjectToPdf } = await import('./lib/adapters/pdf')
     const output = await exportProjectToPdf(createPdfExportProject(project, 'clean'))
     triggerBinaryDownload(
       output,
@@ -3806,6 +3821,7 @@ function App() {
   }
 
   const exportDirtyPdf = async () => {
+    const { exportProjectToPdf } = await import('./lib/adapters/pdf')
     const output = await exportProjectToPdf(createPdfExportProject(project, 'dirty'))
     triggerBinaryDownload(
       output,
@@ -4931,69 +4947,91 @@ function App() {
             )}
 
             {activeTab === 'draft' && !useContinuousDraftEditor && (
-              <section className="script-page tab-enter" data-purpose="script-page">
-                {project.blocks.map((block, index) => (
-                  <article
-                    key={block.id}
-                    ref={(node) => {
-                      itemRefs.current[block.id] = node
-                    }}
-                    className={`script-block ${block.type}${
-                      highlightedId === block.id ? ' highlighted' : ''
-                    }${draggingBlockId === block.id ? ' dragging' : ''}`}
-                    data-block-type={block.type}
-                    data-scene-number={
-                      block.type === 'scene-heading'
-                        ? sceneNumberLabelById.get(block.id) ?? ''
-                        : undefined
-                    }
-                    draggable
-                    onDragStart={() => setDraggingBlockId(block.id)}
-                    onDragEnd={() => setDraggingBlockId(null)}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={() => onBlockDrop(block.id)}
+              <>
+                {editorPages.map((page) => (
+                  <section
+                    key={`editor-page-${page.scriptPageNumber}`}
+                    className="script-page editor-script-page tab-enter"
+                    data-purpose="script-page"
+                    data-script-page-number={page.scriptPageNumber}
+                    aria-label={`Script page ${page.scriptPageNumber}`}
                   >
-                    <textarea
-                      ref={(node) => {
-                        textareaRefs.current[block.id] = node
-                      }}
-                      className={`script-input ${block.type}${
-                        activeBlockId === block.id ? ' selected' : ''
-                      }`}
-                      value={block.text}
-                      onFocus={() => {
-                        setSelectedBlockId(block.id)
-                        if (block.type === 'scene-heading') {
-                          setSelectedSceneId(block.id)
-                        }
-                      }}
-                      onChange={(event) => onBlockTextChange(block.id, event.target.value)}
-                      onKeyDown={(event) => onBlockKeyDown(event, index, block.id, block.type)}
-                      rows={Math.max(1, block.text.split('\n').length)}
-                      placeholder={blockTypePlaceholders[block.type]}
-                    />
+                    {page.blocks.map((block) => {
+                      const index = blockIndexById.get(block.id) ?? 0
 
-                    {block.type === 'character' &&
-                      activeBlockId === block.id &&
-                      activeCharacterSuggestions.length > 0 && (
-                        <div className="character-suggestions" role="listbox">
-                          {activeCharacterSuggestions.map((name) => (
-                            <button
-                              key={`${block.id}-${name}`}
-                              className="character-suggestion-btn"
-                              onMouseDown={(event) => {
-                                event.preventDefault()
-                                applyCharacterSuggestion(block.id, name)
-                              }}
-                            >
-                              {name}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                  </article>
+                      return (
+                        <article
+                          key={block.id}
+                          ref={(node) => {
+                            itemRefs.current[block.id] = node
+                          }}
+                          className={`script-block ${block.type}${
+                            highlightedId === block.id ? ' highlighted' : ''
+                          }${draggingBlockId === block.id ? ' dragging' : ''}`}
+                          data-block-type={block.type}
+                          data-scene-number={
+                            block.type === 'scene-heading'
+                              ? sceneNumberLabelById.get(block.id) ?? ''
+                              : undefined
+                          }
+                          draggable
+                          onDragStart={() => setDraggingBlockId(block.id)}
+                          onDragEnd={() => setDraggingBlockId(null)}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDrop={() => onBlockDrop(block.id)}
+                        >
+                          <textarea
+                            ref={(node) => {
+                              textareaRefs.current[block.id] = node
+                            }}
+                            className={`script-input ${block.type}${
+                              activeBlockId === block.id ? ' selected' : ''
+                            }`}
+                            value={block.text}
+                            onFocus={() => {
+                              setSelectedBlockId(block.id)
+                              if (block.type === 'scene-heading') {
+                                setSelectedSceneId(block.id)
+                              }
+                            }}
+                            onChange={(event) => onBlockTextChange(block.id, event.target.value)}
+                            onKeyDown={(event) =>
+                              onBlockKeyDown(event, index, block.id, block.type)
+                            }
+                            rows={Math.max(1, block.text.split('\n').length)}
+                            placeholder={blockTypePlaceholders[block.type]}
+                          />
+
+                          {block.type === 'character' &&
+                            activeBlockId === block.id &&
+                            activeCharacterSuggestions.length > 0 && (
+                              <div className="character-suggestions" role="listbox">
+                                {activeCharacterSuggestions.map((name) => (
+                                  <button
+                                    key={`${block.id}-${name}`}
+                                    className="character-suggestion-btn"
+                                    onMouseDown={(event) => {
+                                      event.preventDefault()
+                                      applyCharacterSuggestion(block.id, name)
+                                    }}
+                                  >
+                                    {name}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                        </article>
+                      )
+                    })}
+
+                    {page.showPageNumber && (
+                      <div className="editor-page-number" aria-hidden="true">
+                        {page.scriptPageNumber}
+                      </div>
+                    )}
+                  </section>
                 ))}
-              </section>
+              </>
             )}
 
             {activeTab === 'preview' && (
