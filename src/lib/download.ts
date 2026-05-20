@@ -1,8 +1,9 @@
+const downloadReleaseVersion = '0.1.4'
 const releaseBaseUrl =
-  'https://github.com/Srimanthl2k6/Masterscript/releases/download/v0.1.2'
+  `https://github.com/Srimanthl2k6/Masterscript/releases/download/v${downloadReleaseVersion}`
 
 export const MASTER_SCRIPT_DOWNLOAD_URL =
-  `${releaseBaseUrl}/MasterScript.Setup.0.1.2.exe`
+  `${releaseBaseUrl}/MasterScript.Setup.${downloadReleaseVersion}.exe`
 
 export const DESKTOP_DOWNLOAD_LINKS = [
   {
@@ -11,11 +12,11 @@ export const DESKTOP_DOWNLOAD_LINKS = [
   },
   {
     label: 'macOS',
-    url: `${releaseBaseUrl}/MasterScript.mac.0.1.2.universal.dmg`,
+    url: `${releaseBaseUrl}/MasterScript.mac.${downloadReleaseVersion}.universal.dmg`,
   },
   {
     label: 'Linux AppImage',
-    url: `${releaseBaseUrl}/MasterScript.linux.0.1.2.x86_64.AppImage`,
+    url: `${releaseBaseUrl}/MasterScript.linux.${downloadReleaseVersion}.x86_64.AppImage`,
   },
 ]
 

@@ -339,6 +339,7 @@ button:focus-visible {
 
 .left-rail {
   width: 64px;
+  flex-shrink: 0;
   border-right: 1px solid var(--border-soft);
   background: #0a0a0a;
   display: flex;
@@ -389,6 +390,7 @@ button:focus-visible {
 
 .editor-shell {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -1330,6 +1332,7 @@ button:focus-visible {
 
 .right-outline {
   width: 320px;
+  flex-shrink: 0;
   border-left: 1px solid var(--border-soft);
   background: #0a0a0a;
   display: flex;
