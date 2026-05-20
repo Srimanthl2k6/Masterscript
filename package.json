@@ -1,7 +1,7 @@
 {
   "name": "masterscript",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "electron/main.cjs",
   "repository": {
@@ -23,6 +23,7 @@
   },
   "build": {
     "appId": "com.masterscript.desktop",
+    "artifactName": "${productName}.Setup.${version}.${ext}",
     "productName": "MasterScript",
     "icon": "icon.ico",
     "files": [
