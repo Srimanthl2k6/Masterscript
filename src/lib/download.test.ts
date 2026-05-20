@@ -1,11 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import { MASTER_SCRIPT_DOWNLOAD_URL, shouldShowDownloadButton } from './download'
+import {
+  DESKTOP_DOWNLOAD_LINKS,
+  MASTER_SCRIPT_DOWNLOAD_URL,
+  shouldShowDownloadButton,
+} from './download'
 
 describe('download links', () => {
   it('points users to the published Windows installer release asset', () => {
     expect(MASTER_SCRIPT_DOWNLOAD_URL).toBe(
-      'https://github.com/Srimanthl2k6/Masterscript/releases/download/v0.1.1/MasterScript.Setup.0.1.1.exe',
+      'https://github.com/Srimanthl2k6/Masterscript/releases/download/v0.1.2/MasterScript.Setup.0.1.2.exe',
     )
+  })
+
+  it('offers web visitors desktop downloads for Windows, macOS, and Linux', () => {
+    expect(DESKTOP_DOWNLOAD_LINKS).toEqual([
+      {
+        label: 'Windows',
+        url: 'https://github.com/Srimanthl2k6/Masterscript/releases/download/v0.1.2/MasterScript.Setup.0.1.2.exe',
+      },
+      {
+        label: 'macOS',
+        url: 'https://github.com/Srimanthl2k6/Masterscript/releases/download/v0.1.2/MasterScript.mac.0.1.2.universal.dmg',
+      },
+      {
+        label: 'Linux AppImage',
+        url: 'https://github.com/Srimanthl2k6/Masterscript/releases/download/v0.1.2/MasterScript.linux.0.1.2.x86_64.AppImage',
+      },
+    ])
   })
 
   it('shows the installer download only outside the Electron desktop app', () => {

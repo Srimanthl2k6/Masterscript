@@ -176,6 +176,12 @@ button:focus-visible {
   gap: 0.5rem;
 }
 
+.download-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .download-btn {
   padding: 0.42rem 0.95rem;
   border-radius: var(--radius-sm);
@@ -2528,6 +2534,11 @@ kbd {
   }
 
   .home-actions {
+    flex-direction: column;
+  }
+
+  .download-links {
+    width: 100%;
     flex-direction: column;
   }
 
