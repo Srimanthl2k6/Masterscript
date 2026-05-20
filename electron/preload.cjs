@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('masterscript', {
+  isElectron: true,
   autosave: (project) => ipcRenderer.invoke('project:autosave', project),
   readAutosave: () => ipcRenderer.invoke('project:read-autosave'),
   saveProject: (project, title) =>

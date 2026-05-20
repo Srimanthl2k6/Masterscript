@@ -3,6 +3,7 @@ import type { ScriptProject } from './screenplay'
 declare global {
   interface Window {
     masterscript?: {
+      isElectron: true
       autosave: (project: ScriptProject) => Promise<{ ok: boolean }>
       readAutosave: () => Promise<{ ok: boolean; project: ScriptProject | null }>
       saveProject: (

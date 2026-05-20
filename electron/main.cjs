@@ -3,6 +3,7 @@ const { autoUpdater } = require('electron-updater')
 const fs = require('node:fs/promises')
 const path = require('node:path')
 const { configureAutoUpdates } = require('./auto-updater.cjs')
+const { getRendererEntry } = require('./renderer-entry.cjs')
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL)
 
@@ -28,10 +29,20 @@ const createMainWindow = () => {
     },
   })
 
-  if (isDev) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
+  const rendererEntry = getRendererEntry({
+    app,
+    devServerUrl: process.env.VITE_DEV_SERVER_URL,
+    isDev,
+  })
+
+  if (rendererEntry.type === 'url') {
+    mainWindow.loadURL(rendererEntry.value)
   } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+    mainWindow.loadFile(rendererEntry.value)
+  }
+
+  if (process.env.ELECTRON_DEBUG === 'true') {
+    mainWindow.webContents.openDevTools()
   }
 }
 
