@@ -79,20 +79,19 @@ jobs:
           }
 
           $darwinLib = Join-Path $extract 'darwin\10.12\lib'
-          $cryptoLink = Join-Path $darwinLib 'libcrypto.dylib'
-          $sslLink = Join-Path $darwinLib 'libssl.dylib'
-          if ((-not (Test-Path $cryptoLink)) -or ((Get-Item $cryptoLink).Length -eq 0)) {
-            Copy-Item `
-              -LiteralPath (Join-Path $darwinLib 'libcrypto.1.0.0.dylib') `
-              -Destination $cryptoLink `
-              -Force
+          function Repair-SymlinkPlaceholder($linkPath, $targetPath) {
+            $item = Get-Item -LiteralPath $linkPath -ErrorAction SilentlyContinue
+            if (($null -eq $item) -or (($null -eq $item.LinkType) -and ($item.Length -eq 0))) {
+              Copy-Item -LiteralPath $targetPath -Destination $linkPath -Force
+            }
           }
-          if ((-not (Test-Path $sslLink)) -or ((Get-Item $sslLink).Length -eq 0)) {
-            Copy-Item `
-              -LiteralPath (Join-Path $darwinLib 'libssl.1.0.0.dylib') `
-              -Destination $sslLink `
-              -Force
-          }
+
+          Repair-SymlinkPlaceholder `
+            -linkPath (Join-Path $darwinLib 'libcrypto.dylib') `
+            -targetPath (Join-Path $darwinLib 'libcrypto.1.0.0.dylib')
+          Repair-SymlinkPlaceholder `
+            -linkPath (Join-Path $darwinLib 'libssl.dylib') `
+            -targetPath (Join-Path $darwinLib 'libssl.1.0.0.dylib')
 
           if (Test-Path $target) {
             Remove-Item -LiteralPath $target -Recurse -Force
