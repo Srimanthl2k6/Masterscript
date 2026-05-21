@@ -2142,6 +2142,19 @@ kbd {
   color: var(--danger);
 }
 
+.status-pill.collaboration-status.hosting,
+.status-pill.collaboration-status.connected {
+  color: var(--ok);
+}
+
+.status-pill.collaboration-status.reconnecting {
+  color: #d7d7d7;
+}
+
+.status-pill.collaboration-status.disconnected {
+  color: var(--danger);
+}
+
 .palette-overlay {
   position: fixed;
   inset: 0;
@@ -2195,6 +2208,49 @@ kbd {
 .find-replace-grid label > span {
   color: #a0a0a0;
   font-size: 11px;
+}
+
+.collaboration-panel {
+  width: min(680px, calc(100% - 1.6rem));
+}
+
+.collaboration-grid {
+  grid-template-columns: 1fr;
+}
+
+.collaboration-status-grid {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 0.35rem 0.75rem;
+  padding: 0.65rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.collaboration-status-grid span {
+  color: #a0a0a0;
+}
+
+.collaboration-status-grid strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.collaboration-host-list {
+  display: grid;
+  gap: 0.35rem;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.collaboration-host-list code {
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  color: #d7d7d7;
+  overflow-wrap: anywhere;
 }
 
 .find-replace-controls {

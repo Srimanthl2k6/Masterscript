@@ -1,7 +1,10 @@
 const { app, BrowserWindow, dialog, ipcMain } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const fs = require('node:fs/promises')
+const http = require('node:http')
+const os = require('node:os')
 const path = require('node:path')
+const { WebSocketServer, WebSocket } = require('ws')
 const { configureAutoUpdates } = require('./auto-updater.cjs')
 const { getRendererEntry } = require('./renderer-entry.cjs')
 
@@ -14,6 +17,135 @@ const normalizeFileName = (value) =>
     .replace(/^-+|-+$/g, '') || 'untitled-project'
 
 const getAutosavePath = () => path.join(app.getPath('userData'), 'autosave.msproj.json')
+
+let collaborationHttpServer = null
+let collaborationServer = null
+let collaborationPort = null
+let collaborationRoomId = null
+const collaborationLastStateByRoom = new Map()
+
+const createRoomId = () => `masterscript-${Date.now().toString(36)}`
+
+const closeCollaborationServer = async () => {
+  if (collaborationServer) {
+    for (const client of collaborationServer.clients) {
+      client.close()
+    }
+    collaborationServer.close()
+    collaborationServer = null
+  }
+
+  if (collaborationHttpServer) {
+    await new Promise((resolve) => {
+      collaborationHttpServer.close(() => resolve())
+    })
+    collaborationHttpServer = null
+  }
+
+  collaborationPort = null
+  collaborationRoomId = null
+  collaborationLastStateByRoom.clear()
+}
+
+const getLanHostUrls = (port) => {
+  const urls = []
+  const interfaces = os.networkInterfaces()
+  const addresses = Object.values(interfaces)
+    .flat()
+    .filter(
+      (entry) =>
+        entry &&
+        !entry.internal &&
+        (entry.family === 'IPv4' || entry.family === 4) &&
+        typeof entry.address === 'string',
+    )
+    .map((entry) => entry.address)
+
+  for (const address of addresses) {
+    urls.push(`ws://${address}:${port}`)
+  }
+
+  urls.push(`ws://127.0.0.1:${port}`)
+  return [...new Set(urls)]
+}
+
+const parseRoomIdFromRequest = (request, fallbackRoomId) => {
+  try {
+    const requestUrl = new URL(request.url || '/', 'ws://localhost')
+    const roomPath = decodeURIComponent(requestUrl.pathname.replace(/^\/+/, ''))
+    return roomPath || fallbackRoomId
+  } catch {
+    return fallbackRoomId
+  }
+}
+
+const startCollaborationServer = async ({ roomId, port }) => {
+  await closeCollaborationServer()
+
+  const resolvedRoomId = roomId || createRoomId()
+  const requestedPort = Number.isInteger(port) && port >= 0 ? port : 0
+  const httpServer = http.createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'text/plain' })
+    response.end('MasterScript collaboration relay')
+  })
+  const websocketServer = new WebSocketServer({ server: httpServer })
+
+  websocketServer.on('connection', (client, request) => {
+    const clientRoomId = parseRoomIdFromRequest(request, resolvedRoomId)
+    client.roomId = clientRoomId
+
+    const lastState = collaborationLastStateByRoom.get(clientRoomId)
+    if (lastState && client.readyState === WebSocket.OPEN) {
+      client.send(lastState)
+    }
+
+    for (const peer of websocketServer.clients) {
+      if (peer !== client && peer.roomId === clientRoomId && peer.readyState === WebSocket.OPEN) {
+        peer.send(JSON.stringify({ type: 'sync-request' }))
+      }
+    }
+
+    client.on('message', (message) => {
+      const payload = Buffer.isBuffer(message) ? message.toString('utf8') : String(message)
+      try {
+        const parsed = JSON.parse(payload)
+        if (parsed?.type === 'state') {
+          collaborationLastStateByRoom.set(clientRoomId, payload)
+        }
+      } catch {
+        // Non-JSON collaboration frames are still relayed, but not cached as room state.
+      }
+
+      for (const peer of websocketServer.clients) {
+        if (peer !== client && peer.roomId === clientRoomId && peer.readyState === WebSocket.OPEN) {
+          peer.send(payload)
+        }
+      }
+    })
+  })
+
+  await new Promise((resolve, reject) => {
+    httpServer.once('error', reject)
+    httpServer.listen(requestedPort, '0.0.0.0', () => {
+      httpServer.off('error', reject)
+      resolve()
+    })
+  })
+
+  collaborationHttpServer = httpServer
+  collaborationServer = websocketServer
+  collaborationPort = httpServer.address().port
+  collaborationRoomId = resolvedRoomId
+
+  const hostUrls = getLanHostUrls(collaborationPort)
+  return {
+    ok: true,
+    roomId: collaborationRoomId,
+    port: collaborationPort,
+    hostUrls,
+    primaryHostUrl: hostUrls[0],
+  }
+}
 
 const createMainWindow = () => {
   const mainWindow = new BrowserWindow({
@@ -233,6 +365,56 @@ ipcMain.handle('project:export-pdf', async (_event, payload) => {
   return { ok: true, path: filePath }
 })
 
+ipcMain.handle('collaboration:lan-host', async (_event, payload) => {
+  try {
+    return await startCollaborationServer({
+      roomId: typeof payload?.roomId === 'string' ? payload.roomId : undefined,
+      port: Number.isInteger(payload?.port) ? payload.port : 0,
+    })
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Could not start collaboration host',
+    }
+  }
+})
+
+ipcMain.handle('collaboration:lan-stop', async () => {
+  await closeCollaborationServer()
+  return { ok: true }
+})
+
+ipcMain.handle('collaboration:lan-status', async () => {
+  const hostUrls = collaborationPort ? getLanHostUrls(collaborationPort) : []
+  return {
+    ok: true,
+    running: Boolean(collaborationServer && collaborationHttpServer),
+    roomId: collaborationRoomId,
+    port: collaborationPort,
+    hostUrls,
+    primaryHostUrl: hostUrls[0],
+  }
+})
+
+ipcMain.handle('collaboration:lan-join', async (_event, payload) => {
+  const serverUrl = typeof payload?.serverUrl === 'string' ? payload.serverUrl.trim() : ''
+  const roomId = typeof payload?.roomId === 'string' ? payload.roomId.trim() : ''
+  if (!serverUrl || !roomId) {
+    return { ok: false, error: 'LAN server URL and room ID are required' }
+  }
+
+  try {
+    const parsedUrl = new URL(serverUrl)
+    if (parsedUrl.protocol !== 'ws:' && parsedUrl.protocol !== 'wss:') {
+      return { ok: false, error: 'LAN server URL must start with ws:// or wss://' }
+    }
+  } catch {
+    return { ok: false, error: 'LAN server URL is invalid' }
+  }
+
+  return { ok: true, serverUrl, roomId }
+})
+
 app.whenReady().then(() => {
   createMainWindow()
   void configureAutoUpdates({ autoUpdater, isDev }).checkForUpdates()
@@ -248,4 +430,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('before-quit', () => {
+  void closeCollaborationServer()
 })

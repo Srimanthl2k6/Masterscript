@@ -19,4 +19,10 @@ contextBridge.exposeInMainWorld('masterscript', {
     ipcRenderer.invoke('project:export-docx', { title, base64 }),
   exportPdf: (title, base64) =>
     ipcRenderer.invoke('project:export-pdf', { title, base64 }),
+  hostLanCollaboration: (options) =>
+    ipcRenderer.invoke('collaboration:lan-host', options),
+  joinLanCollaboration: (options) =>
+    ipcRenderer.invoke('collaboration:lan-join', options),
+  stopLanCollaboration: () => ipcRenderer.invoke('collaboration:lan-stop'),
+  getLanCollaborationStatus: () => ipcRenderer.invoke('collaboration:lan-status'),
 })

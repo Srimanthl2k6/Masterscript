@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent } from 'react'
 import CommandPalette, { type CommandResult } from './components/CommandPalette'
+import { useCollaborationSession, type CollaborationStatus } from './lib/collaboration/useCollaborationSession'
 import { DESKTOP_DOWNLOAD_LINKS, shouldShowDownloadButton } from './lib/download'
 import { paginateProjectForPrint } from './lib/adapters/pagination'
 import type { AdapterWarning } from './lib/adapters/types'
@@ -172,6 +173,14 @@ type WorkspaceTab =
 
 type AutosaveState = 'idle' | 'saving' | 'saved' | 'error'
 type ThemeMode = 'dark' | 'light'
+const collaborationStatusLabels: Record<CollaborationStatus, string> = {
+  offline: 'Offline',
+  hosting: 'Hosting',
+  connected: 'Connected',
+  disconnected: 'Disconnected',
+  reconnecting: 'Reconnecting',
+}
+
 type ReportView =
   | 'scene'
   | 'character'
@@ -994,6 +1003,10 @@ function App() {
       return []
     }
   })
+  const [isCollaborationPanelOpen, setIsCollaborationPanelOpen] = useState(false)
+  const [collaborationServerInput, setCollaborationServerInput] = useState('')
+  const [collaborationRoomInput, setCollaborationRoomInput] = useState('')
+  const [collaborationInviteInput, setCollaborationInviteInput] = useState('')
 
   const project = history.present
   const scenes = useMemo(() => extractScenes(project), [project])
@@ -1645,6 +1658,7 @@ function App() {
   const pendingContinuousCursor = useRef<number | null>(null)
   const pendingScrollId = useRef<string | null>(null)
   const autoFocusedProjectId = useRef<string | null>(null)
+  const applyingCollaborationProjectRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const findInputRef = useRef<HTMLInputElement | null>(null)
   const keyboardActionsRef = useRef<{
@@ -1661,6 +1675,27 @@ function App() {
     createNewProject: () => {
       return
     },
+  })
+
+  const persistProjectImmediately = useCallback(async (targetProject: ScriptProject) => {
+    if (window.masterscript) {
+      await window.masterscript.autosave(targetProject)
+    } else {
+      localStorage.setItem(autosaveKey, JSON.stringify(targetProject))
+    }
+    writeRecentProjectSnapshot(targetProject)
+  }, [])
+
+  const applyRemoteCollaborationProject = useCallback((remoteProject: ScriptProject) => {
+    const hydrated = hydrateProject(remoteProject)
+    applyingCollaborationProjectRef.current = true
+    setHistory({ past: [], present: hydrated, future: [] })
+    setStatusMessage('Collaboration update received')
+  }, [])
+
+  const collaboration = useCollaborationSession({
+    onRemoteProject: applyRemoteCollaborationProject,
+    autosaveProject: persistProjectImmediately,
   })
 
   const focusQueuedBlock = useCallback(() => {
@@ -1861,6 +1896,19 @@ function App() {
       window.clearTimeout(timer)
     }
   }, [project])
+
+  useEffect(() => {
+    if (!collaboration.isActive) {
+      return
+    }
+
+    if (applyingCollaborationProjectRef.current) {
+      applyingCollaborationProjectRef.current = false
+      return
+    }
+
+    collaboration.syncProject(project)
+  }, [collaboration, project])
 
   useEffect(() => {
     focusQueuedBlock()
@@ -2562,6 +2610,7 @@ function App() {
       const result = await window.masterscript.openProject()
       if (result.ok && result.project) {
         const loadedProject = hydrateProject(result.project)
+        await collaboration.stop()
         setHistory({ past: [], present: loadedProject, future: [] })
         setAppView('workspace')
         setSavedPath(result.path ?? 'Opened from desktop picker')
@@ -2583,6 +2632,7 @@ function App() {
         const result = await window.masterscript.readAutosave()
         if (result.ok && result.project) {
           const recovered = hydrateProject(result.project)
+          await collaboration.stop()
           setHistory({ past: [], present: recovered, future: [] })
           setAppView('workspace')
           setSavedPath(entry.label)
@@ -2597,6 +2647,7 @@ function App() {
           const parsed = JSON.parse(raw) as unknown
           if (isScriptProject(parsed)) {
             const recovered = hydrateProject(parsed)
+            await collaboration.stop()
             setHistory({ past: [], present: recovered, future: [] })
             setAppView('workspace')
             setSavedPath(entry.label)
@@ -2619,6 +2670,7 @@ function App() {
       const snapshot = readRecentProjectSnapshots()[entry.projectId]
       if (snapshot) {
         const loadedProject = hydrateProject(snapshot)
+        await collaboration.stop()
         setHistory({ past: [], present: loadedProject, future: [] })
         setAppView('workspace')
         setSavedPath(entry.label)
@@ -2658,6 +2710,7 @@ function App() {
       const result = await window.masterscript.openProjectPath(entry.label)
       if (result.ok && result.project) {
         const loadedProject = hydrateProject(result.project)
+        await collaboration.stop()
         setHistory({ past: [], present: loadedProject, future: [] })
         setAppView('workspace')
         setSavedPath(result.path ?? entry.label)
@@ -2693,6 +2746,7 @@ function App() {
         }
 
         const loadedProject = hydrateProject(parsed)
+        void collaboration.stop()
         setHistory({
           past: [],
           present: loadedProject,
@@ -2714,6 +2768,7 @@ function App() {
 
   const createNewProject = () => {
     const fresh = createEmptyProject()
+    void collaboration.stop()
     setHistory({ past: [], present: fresh, future: [] })
     setAppView('workspace')
     setActiveTab('draft')
@@ -2723,6 +2778,73 @@ function App() {
     pushRecentProject(fresh.meta.title, 'project', fresh.id)
     setStatusMessage('Started a new project')
     setAutosaveState('idle')
+  }
+
+  const openCollaborationPanel = () => {
+    setCollaborationServerInput(collaboration.sessionInfo?.serverUrl ?? '')
+    setCollaborationRoomInput(collaboration.sessionInfo?.roomId ?? '')
+    setCollaborationInviteInput(collaboration.sessionInfo?.inviteCode ?? '')
+    setIsCollaborationPanelOpen(true)
+  }
+
+  const closeCollaborationPanel = () => {
+    setIsCollaborationPanelOpen(false)
+  }
+
+  const hostLanCollaboration = async () => {
+    try {
+      const info = await collaboration.startLanHost(project)
+      setCollaborationServerInput(info.serverUrl)
+      setCollaborationRoomInput(info.roomId)
+      setCollaborationInviteInput(info.inviteCode)
+      setStatusMessage(`Hosting LAN session at ${info.serverUrl}`)
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : 'Could not start LAN collaboration',
+      )
+    }
+  }
+
+  const joinLanCollaboration = async () => {
+    try {
+      const info = await collaboration.joinLan(
+        project,
+        collaborationServerInput,
+        collaborationRoomInput,
+        collaborationInviteInput,
+      )
+      setCollaborationServerInput(info.serverUrl)
+      setCollaborationRoomInput(info.roomId)
+      setCollaborationInviteInput(info.inviteCode)
+      setStatusMessage(`Joining LAN session ${info.roomId}`)
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : 'Could not join LAN collaboration',
+      )
+    }
+  }
+
+  const startWebRtcCollaboration = async () => {
+    try {
+      const info = await collaboration.startWebRtc(
+        project,
+        collaborationRoomInput,
+        collaborationInviteInput,
+      )
+      setCollaborationServerInput(info.serverUrl)
+      setCollaborationRoomInput(info.roomId)
+      setCollaborationInviteInput(info.inviteCode)
+      setStatusMessage(`WebRTC collaboration room active: ${info.roomId}`)
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : 'Could not start WebRTC collaboration',
+      )
+    }
+  }
+
+  const stopCollaboration = async () => {
+    await collaboration.stop()
+    setStatusMessage('Collaboration stopped; local autosave flushed')
   }
 
   const toggleThemeMode = () => {
@@ -2763,6 +2885,7 @@ function App() {
       hydrated.meta.title = inferTitleFromPath(path)
     }
 
+    void collaboration.stop()
     setHistory({
       past: [],
       present: hydrated,
@@ -4878,6 +5001,9 @@ function App() {
           </button>
           <button className="ghost-btn" onClick={redo} disabled={history.future.length === 0}>
             Redo
+          </button>
+          <button className="ghost-btn" onClick={openCollaborationPanel}>
+            Collaborate
           </button>
           <button className="share-btn" onClick={saveProject}>
             Share
@@ -7478,6 +7604,9 @@ function App() {
           {autosaveState === 'error' && 'Autosave failed'}
           {autosaveState === 'idle' && 'Autosave idle'}
         </span>
+        <span className={`status-pill collaboration-status ${collaboration.status}`}>
+          Collaboration: {collaborationStatusLabels[collaboration.status]}
+        </span>
         <span>{statusMessage}</span>
         <span>{savedPath}</span>
         <span>
@@ -7488,6 +7617,73 @@ function App() {
           {` | Words: ${stats.wordCount} | Pages: ${stats.estimatedPages}`}
         </span>
       </footer>
+
+      {isCollaborationPanelOpen && (
+        <div className="palette-overlay" onMouseDown={closeCollaborationPanel}>
+          <section
+            className="find-replace-panel collaboration-panel"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="find-replace-head">
+              <strong>Collaboration</strong>
+              <button className="tiny-btn" onClick={closeCollaborationPanel}>
+                Close
+              </button>
+            </div>
+
+            <div className="collaboration-status-grid">
+              <span>Status</span>
+              <strong>{collaborationStatusLabels[collaboration.status]}</strong>
+              <span>Room</span>
+              <strong>{collaboration.sessionInfo?.roomId ?? 'Not connected'}</strong>
+            </div>
+
+            <div className="find-replace-grid collaboration-grid">
+              <label>
+                <span>LAN Server</span>
+                <input
+                  value={collaborationServerInput}
+                  onChange={(event) => setCollaborationServerInput(event.target.value)}
+                  placeholder="ws://192.168.1.12:12345"
+                />
+              </label>
+              <label>
+                <span>Room ID</span>
+                <input
+                  value={collaborationRoomInput}
+                  onChange={(event) => setCollaborationRoomInput(event.target.value)}
+                  placeholder="masterscript-room"
+                />
+              </label>
+              <label>
+                <span>Invite Key</span>
+                <input
+                  value={collaborationInviteInput}
+                  onChange={(event) => setCollaborationInviteInput(event.target.value)}
+                  placeholder="Host key"
+                />
+              </label>
+            </div>
+
+            {collaboration.sessionInfo?.hostUrls.length ? (
+              <div className="collaboration-host-list">
+                {collaboration.sessionInfo.hostUrls.map((url) => (
+                  <code key={url}>{url}</code>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="inline-actions">
+              <button onClick={() => void hostLanCollaboration()}>Host LAN</button>
+              <button onClick={() => void joinLanCollaboration()}>Join LAN</button>
+              <button onClick={() => void startWebRtcCollaboration()}>Start WebRTC</button>
+              <button onClick={() => void stopCollaboration()} disabled={!collaboration.isActive}>
+                Stop
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {isFindReplaceOpen && (
         <div className="palette-overlay" onMouseDown={closeFindReplace}>

@@ -1,5 +1,35 @@
 import type { ScriptProject } from './screenplay'
 
+interface LanCollaborationHostOptions {
+  roomId?: string
+  port?: number
+}
+
+interface LanCollaborationJoinOptions {
+  serverUrl: string
+  roomId: string
+}
+
+interface LanCollaborationHostResult {
+  ok: boolean
+  roomId?: string
+  port?: number
+  hostUrls?: string[]
+  primaryHostUrl?: string
+  error?: string
+}
+
+interface LanCollaborationJoinResult {
+  ok: boolean
+  serverUrl?: string
+  roomId?: string
+  error?: string
+}
+
+interface LanCollaborationStatusResult extends LanCollaborationHostResult {
+  running?: boolean
+}
+
 declare global {
   interface Window {
     masterscript?: {
@@ -56,6 +86,14 @@ declare global {
         title: string,
         base64: string,
       ) => Promise<{ ok: boolean; path?: string; cancelled?: boolean }>
+      hostLanCollaboration: (
+        options: LanCollaborationHostOptions,
+      ) => Promise<LanCollaborationHostResult>
+      joinLanCollaboration: (
+        options: LanCollaborationJoinOptions,
+      ) => Promise<LanCollaborationJoinResult>
+      stopLanCollaboration: () => Promise<{ ok: boolean }>
+      getLanCollaborationStatus: () => Promise<LanCollaborationStatusResult>
     }
   }
 }
