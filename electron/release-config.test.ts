@@ -9,7 +9,7 @@ describe('desktop release configuration', () => {
   const build = packageJson.build
 
   it('targets the next cross-platform release version', () => {
-    expect(packageJson.version).toBe('0.1.8')
+    expect(packageJson.version).toBe('0.1.9')
     expect(packageJson.description).toBe(
       'MasterScript desktop screenwriting suite',
     )
