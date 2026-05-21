@@ -211,6 +211,22 @@ ipcMain.handle('project:save-file', async (_event, payload) => {
   return { ok: true, path: filePath }
 })
 
+ipcMain.handle('project:save-path', async (_event, payload) => {
+  const project = payload?.project
+  const filePath = typeof payload?.filePath === 'string' ? payload.filePath : ''
+  if (!project || !filePath) {
+    return { ok: false, error: 'Missing project or file path' }
+  }
+
+  const resolvedPath = path.resolve(filePath)
+  if (!/\.msproj\.json$/i.test(resolvedPath)) {
+    return { ok: false, error: 'Project path must end with .msproj.json' }
+  }
+
+  await fs.writeFile(resolvedPath, JSON.stringify(project, null, 2), 'utf8')
+  return { ok: true, path: resolvedPath }
+})
+
 ipcMain.handle('project:open-file', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog({
     title: 'Open MasterScript project',

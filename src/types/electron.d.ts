@@ -40,6 +40,10 @@ declare global {
         project: ScriptProject,
         title: string,
       ) => Promise<{ ok: boolean; path?: string; cancelled?: boolean }>
+      saveProjectPath: (
+        filePath: string,
+        project: ScriptProject,
+      ) => Promise<{ ok: boolean; path?: string; error?: string }>
       openProject: () => Promise<{
         ok: boolean
         project?: ScriptProject

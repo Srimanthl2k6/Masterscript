@@ -21,6 +21,10 @@ describe('project Yjs conversion', () => {
     const project = createEmptyProject()
     project.meta.title = 'Collaborative Draft'
     project.meta.revisionMode = true
+    project.meta.collaborationMode = 'lan'
+    project.meta.collaborationRoomId = 'masterscript-room'
+    project.meta.collaborationInviteKey = 'secret.salt'
+    project.meta.collaborationLanServerUrl = 'ws://192.168.1.12:12345'
     project.blocks = [
       {
         ...createBlock('scene-heading', 'INT. OFFICE - DAY'),
@@ -56,6 +60,10 @@ describe('project Yjs conversion', () => {
     const roundTripped = yDocToScriptProject(scriptProjectToYDoc(project))
 
     expect(roundTripped).toEqual(project)
+    expect(roundTripped.meta.collaborationMode).toBe('lan')
+    expect(roundTripped.meta.collaborationRoomId).toBe('masterscript-room')
+    expect(roundTripped.meta.collaborationInviteKey).toBe('secret.salt')
+    expect(roundTripped.meta.collaborationLanServerUrl).toBe('ws://192.168.1.12:12345')
   })
 
   it('updates existing block Y.Text instances with minimal text diffs', () => {

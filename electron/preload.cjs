@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('masterscript', {
   readAutosave: () => ipcRenderer.invoke('project:read-autosave'),
   saveProject: (project, title) =>
     ipcRenderer.invoke('project:save-file', { project, title }),
+  saveProjectPath: (filePath, project) =>
+    ipcRenderer.invoke('project:save-path', { filePath, project }),
   openProject: () => ipcRenderer.invoke('project:open-file'),
   openProjectPath: (filePath) => ipcRenderer.invoke('project:open-path', filePath),
   exportFountain: (title, content) =>

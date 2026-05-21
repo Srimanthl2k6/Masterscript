@@ -177,6 +177,15 @@ export const findBlockMap = (ydoc: Y.Doc, blockId: string): BlockMap | null => {
   return null
 }
 
+export const hasRenderableProject = (ydoc: Y.Doc): boolean => {
+  const projectMap = getProjectMap(ydoc)
+  return (
+    typeof projectMap.get('id') === 'string' &&
+    projectMap.get('meta') instanceof Y.Map &&
+    projectMap.get('blocks') instanceof Y.Array
+  )
+}
+
 export const scriptProjectToYDoc = (project: ScriptProject): Y.Doc => {
   const ydoc = new Y.Doc()
   applyProjectToYDoc(ydoc, project)

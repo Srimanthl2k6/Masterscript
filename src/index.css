@@ -176,6 +176,31 @@ button:focus-visible {
   gap: 0.5rem;
 }
 
+.home-collaboration-join {
+  border-top: 1px solid var(--border-soft);
+  padding-top: 0.9rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.home-collaboration-join h2 {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+}
+
+.home-collaboration-join input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-strong);
+  padding: 0.65rem 0.75rem;
+}
+
 .download-links {
   display: flex;
   flex-wrap: wrap;
@@ -2216,6 +2241,10 @@ kbd {
 
 .collaboration-grid {
   grid-template-columns: 1fr;
+}
+
+.collaboration-invite-field input {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
 }
 
 .collaboration-status-grid {

@@ -489,6 +489,10 @@ export interface ScriptProjectMeta {
   updatedAt: string
   revisionMode: boolean
   activeRevision: RevisionColor
+  collaborationRoomId?: string
+  collaborationInviteKey?: string
+  collaborationMode?: 'webrtc' | 'lan'
+  collaborationLanServerUrl?: string
 }
 
 export interface RevisionSnapshot {
