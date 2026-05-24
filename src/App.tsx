@@ -3,6 +3,11 @@ import type { ChangeEvent, KeyboardEvent } from 'react'
 import CommandPalette, { type CommandResult } from './components/CommandPalette'
 import { useCollaborationSession, type CollaborationStatus } from './lib/collaboration/useCollaborationSession'
 import {
+  workspaceFileMenuGroups,
+  type WorkspaceFileMenuItem,
+  type WorkspaceFileMenuItemId,
+} from './workspaceFileMenu'
+import {
   buildCollaborationInvite,
   hasCollaborationMeta,
   parseCollaborationInvite,
@@ -998,6 +1003,8 @@ function App() {
   const [renameFrom, setRenameFrom] = useState('')
   const [renameTo, setRenameTo] = useState('')
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
+  const [isFileMenuOpen, setIsFileMenuOpen] = useState(false)
+  const [isRightOutlineCollapsed, setIsRightOutlineCollapsed] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
   const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false)
   const [isSnapshotHistoryOpen, setIsSnapshotHistoryOpen] = useState(false)
@@ -1200,6 +1207,7 @@ function App() {
     productivityState.settings.focusMode ? 'focus-mode' : '',
     productivityState.settings.typewriterMode ? 'typewriter-mode' : '',
     productivityState.settings.fullscreenMode ? 'fullscreen-writing' : '',
+    isRightOutlineCollapsed ? 'right-outline-is-collapsed' : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -1712,6 +1720,7 @@ function App() {
   const collaborationBootstrapAbortRef = useRef<AbortController | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const findInputRef = useRef<HTMLInputElement | null>(null)
+  const fileMenuRef = useRef<HTMLDivElement | null>(null)
   const keyboardActionsRef = useRef<{
     saveProject: () => Promise<void>
     openProject: () => Promise<void>
@@ -4961,6 +4970,80 @@ function App() {
     setCommandQuery('')
   }
 
+  const getFileMenuItemLabel = (item: WorkspaceFileMenuItem) => {
+    if (item.id === 'theme') {
+      return `Theme: ${themeMode === 'dark' ? 'Dark' : 'Light'}`
+    }
+
+    return item.label
+  }
+
+  const isFileMenuItemDisabled = (itemId: WorkspaceFileMenuItemId) => {
+    if (itemId === 'undo') {
+      return history.past.length === 0
+    }
+
+    if (itemId === 'redo') {
+      return history.future.length === 0
+    }
+
+    return false
+  }
+
+  const runFileMenuItem = (itemId: WorkspaceFileMenuItemId) => {
+    if (isFileMenuItemDisabled(itemId)) {
+      return
+    }
+
+    setIsFileMenuOpen(false)
+
+    switch (itemId) {
+      case 'home':
+        setAppView('home')
+        return
+      case 'new':
+        createNewProject()
+        return
+      case 'open':
+        void openProject()
+        return
+      case 'import-fdx':
+        void importFdx()
+        return
+      case 'import-fountain':
+        void importFountain()
+        return
+      case 'import-docx':
+        void importDocx()
+        return
+      case 'export-fdx':
+        void exportFdx()
+        return
+      case 'export-docx':
+        void exportDocx()
+        return
+      case 'export-pdf':
+        void exportPdf()
+        return
+      case 'print-preview':
+        setActiveTab('preview')
+        setStatusMessage('Opened print preview')
+        return
+      case 'theme':
+        toggleThemeMode()
+        return
+      case 'snapshots':
+        openSnapshotHistory()
+        return
+      case 'undo':
+        undo()
+        return
+      case 'redo':
+        redo()
+        return
+    }
+  }
+
   const applyBlockFormat = (type: BlockType) => {
     if (activeBlockId) {
       setSelectedBlockId(activeBlockId)
@@ -5086,6 +5169,36 @@ function App() {
   })
 
   useEffect(() => {
+    if (!isFileMenuOpen) {
+      return
+    }
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (
+        fileMenuRef.current &&
+        event.target instanceof Node &&
+        !fileMenuRef.current.contains(event.target)
+      ) {
+        setIsFileMenuOpen(false)
+      }
+    }
+
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsFileMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [isFileMenuOpen])
+
+  useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       const withMod = event.ctrlKey || event.metaKey
       const key = event.key.toLowerCase()
@@ -5160,6 +5273,7 @@ function App() {
 
   const isRunningInElectron = Boolean(window.masterscript?.isElectron)
   const showDownloadButton = shouldShowDownloadButton(isRunningInElectron)
+  const rightOutlineTitle = activeTab === 'draft' ? 'Writer Panel' : 'Scene Outlines'
 
   return (
     <div className={appShellClass}>
@@ -5286,56 +5400,52 @@ function App() {
         </div>
 
         <div className="header-actions">
-          <button className="ghost-btn" onClick={() => setAppView('home')}>
-            Home
-          </button>
-          <button className="ghost-btn" onClick={createNewProject}>
-            New
-          </button>
-          <button className="ghost-btn" onClick={openProject}>
-            Open
-          </button>
-          <button className="ghost-btn" onClick={() => void importFdx()}>
-            Import FDX
-          </button>
-          <button className="ghost-btn" onClick={() => void importFountain()}>
-            Import Fountain
-          </button>
-          <button className="ghost-btn" onClick={() => void importDocx()}>
-            Import DOCX
-          </button>
-          <button className="ghost-btn" onClick={() => void exportFdx()}>
-            Export FDX
-          </button>
-          <button className="ghost-btn" onClick={() => void exportDocx()}>
-            Export DOCX
-          </button>
-          <button className="ghost-btn" onClick={() => void exportPdf()}>
-            Export PDF
-          </button>
-          <button
-            className="ghost-btn"
-            onClick={() => {
-              setActiveTab('preview')
-              setStatusMessage('Opened print preview')
-            }}
-          >
-            Print Preview
-          </button>
-          <button className="ghost-btn" onClick={toggleThemeMode}>
-            Theme: {themeMode === 'dark' ? 'Dark' : 'Light'}
-          </button>
+          <div className="file-menu-wrap" ref={fileMenuRef}>
+            <button
+              className="ghost-btn file-menu-trigger"
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={isFileMenuOpen}
+              onClick={() => setIsFileMenuOpen((previous) => !previous)}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault()
+                  setIsFileMenuOpen(true)
+                }
+              }}
+            >
+              File
+            </button>
+
+            {isFileMenuOpen && (
+              <div className="file-menu-panel" role="menu" aria-label="File menu">
+                {workspaceFileMenuGroups.map((group) => (
+                  <div
+                    className="file-menu-group"
+                    key={group.id}
+                    role="group"
+                    aria-label={group.label}
+                  >
+                    <p>{group.label}</p>
+                    {group.items.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        role="menuitem"
+                        disabled={isFileMenuItemDisabled(item.id)}
+                        onClick={() => runFileMenuItem(item.id)}
+                      >
+                        {getFileMenuItemLabel(item)}
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button className="ghost-btn" onClick={openFindReplace}>
             Find/Replace
-          </button>
-          <button className="ghost-btn" onClick={openSnapshotHistory}>
-            Snapshots
-          </button>
-          <button className="ghost-btn" onClick={undo} disabled={history.past.length === 0}>
-            Undo
-          </button>
-          <button className="ghost-btn" onClick={redo} disabled={history.future.length === 0}>
-            Redo
           </button>
           <button className="ghost-btn" onClick={openCollaborationPanel}>
             Collaborate
@@ -7558,17 +7668,41 @@ function App() {
           )}
         </main>
 
-        <aside className="right-outline">
-          <div className="outline-header">
-            <h2>{activeTab === 'draft' ? 'Writer Panel' : 'Scene Outlines'}</h2>
-            <button title="Focus draft" onClick={() => setActiveTab('draft')}>
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="m18 15-6-6-6 6" />
-              </svg>
+        <aside className={isRightOutlineCollapsed ? 'right-outline collapsed' : 'right-outline'}>
+          {isRightOutlineCollapsed ? (
+            <button
+              className="right-outline-tab"
+              type="button"
+              onClick={() => setIsRightOutlineCollapsed(false)}
+              aria-label={`Expand ${rightOutlineTitle}`}
+              title={`Expand ${rightOutlineTitle}`}
+            >
+              <span>{rightOutlineTitle}</span>
+              <strong>{scenes.length}</strong>
             </button>
-          </div>
+          ) : (
+            <>
+              <div className="outline-header">
+                <h2>{rightOutlineTitle}</h2>
+                <div className="outline-header-actions">
+                  <button
+                    title="Collapse right sidebar"
+                    aria-label="Collapse right sidebar"
+                    onClick={() => setIsRightOutlineCollapsed(true)}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="m15 18-6-6 6-6" />
+                    </svg>
+                  </button>
+                  <button title="Focus draft" onClick={() => setActiveTab('draft')}>
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="m18 15-6-6-6 6" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
 
-          <div className="right-outline-scroll">
+              <div className="right-outline-scroll">
             {activeTab === 'draft' && !useContinuousDraftEditor && (
               <section className="outline-tools writer-flow-panel">
                 <div className="current-element-card">
@@ -7900,7 +8034,9 @@ function App() {
                 {project.revisionDraftSets.length === 1 ? '' : 's'}
               </p>
             </section>
-          </div>
+              </div>
+            </>
+          )}
         </aside>
       </div>
 
