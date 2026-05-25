@@ -353,7 +353,7 @@ Implemented on branch `feat/zero-cost-collaboration`.
 
 What landed:
 
-- Added pinned collaboration dependencies: `yjs@13.6.30`, `y-webrtc@10.3.0`, `ws@8.20.1`, and `y-indexeddb@9.0.12`.
+- Added pinned collaboration dependencies: `yjs@13.6.30`, `y-websocket@2.1.0`, `y-webrtc@10.3.0`, `ws@8.20.1`, and `y-indexeddb@9.0.12`.
 - Added a structured Yjs project mapper in `src/lib/collaboration/projectYjs.ts` with tests covering round-trip serialization, block metadata, revision snapshots, text diffing, and block structural updates.
 - Added a collaboration session hook with IndexedDB persistence, WebRTC provider support, autosave flushing, and React feedback-loop protection.
 - Added an encrypted LAN provider for Yjs update frames using AES-GCM over a local Electron WebSocket relay.
@@ -363,7 +363,6 @@ What landed:
 Implementation note:
 
 - The LAN transport uses a custom encrypted relay instead of the plaintext `y-websocket` server protocol. This preserves the plan's provider-level encryption requirement; a stock `y-websocket` server needs plaintext Yjs protocol frames and is not compatible with end-to-end encrypted update payloads without a deeper protocol fork.
-- `y-websocket@2.1.0` was removed during release hardening because it was not used by the encrypted LAN relay and pulled `y-leveldb -> leveldown`, which broke macOS universal packaging when Electron Builder tried to merge identical arm64 native binaries with `lipo`.
 
 Verification:
 
