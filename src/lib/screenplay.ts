@@ -480,7 +480,32 @@ const parseSceneLocation = (heading: string): string => {
     .trim()
 }
 
-const normalizeCharacterName = (value: string): string => value.trim().toUpperCase()
+export type CharacterVoiceCue = 'V.O.' | 'O.S.'
+
+export const normalizeCharacterName = (value: string): string =>
+  value
+    .trim()
+    .replace(/\s*\([^)]*\)?\s*$/, '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toUpperCase()
+
+export const insertCharacterVoiceCue = (
+  value: string,
+  cue: CharacterVoiceCue,
+): { text: string; cursor: number } => {
+  const openParenIndex = value.lastIndexOf('(')
+  const base =
+    openParenIndex >= 0 && !value.slice(openParenIndex).includes(')')
+      ? value.slice(0, openParenIndex).trimEnd()
+      : value.trimEnd()
+  const text = `${base}${base ? ' ' : ''}(${cue})`
+
+  return {
+    text,
+    cursor: text.length,
+  }
+}
 
 export const collectCharacterSuggestions = (project: ScriptProject): string[] => {
   const names = new Set<string>()
@@ -537,7 +562,7 @@ export const generateProductionBreakdown = (
     }
 
     if (block.type === 'character') {
-      const name = block.text.trim().toUpperCase()
+      const name = normalizeCharacterName(block.text)
       if (!name) {
         continue
       }
@@ -714,7 +739,7 @@ export const detectCatalogEntries = (project: ScriptProject): CatalogEntry[] => 
 
   for (const block of project.blocks) {
     if (block.type === 'character') {
-      pushUnique('character', block.text.toUpperCase())
+      pushUnique('character', normalizeCharacterName(block.text))
     }
 
     if (block.type === 'scene-heading') {

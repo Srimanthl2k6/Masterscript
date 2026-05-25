@@ -9,6 +9,7 @@ import {
   cycleScreenplayBlockType,
   detectCatalogEntries,
   generateProductionBreakdown,
+  insertCharacterVoiceCue,
   nextTypeForEnter,
   screenplayKeyboardCycle,
   summarizeRevisionSnapshotDiff,
@@ -173,6 +174,20 @@ describe('screenplay core behavior', () => {
     expect(suggestions).toEqual(['JON', 'MAYA', 'NORA'])
   })
 
+  it('collects character suggestions without voice cue suffixes', () => {
+    const project = createEmptyProject()
+    project.blocks = [
+      createBlock('character', 'MAYA'),
+      createBlock('character', 'MAYA (V.O.)'),
+      createBlock('character', 'MAYA (O.S.)'),
+      createBlock('character', 'JON ('),
+    ]
+
+    const suggestions = collectCharacterSuggestions(project)
+
+    expect(suggestions).toEqual(['JON', 'MAYA'])
+  })
+
   it('builds a character dialogue report with counts', () => {
     const project = createEmptyProject()
     project.blocks = [
@@ -190,6 +205,36 @@ describe('screenplay core behavior', () => {
     expect(report).toContain('Character Dialogue Report')
     expect(report).toContain('MAYA | 2 | 2 | 8')
     expect(report).toContain('JON | 1 | 1 | 4')
+  })
+
+  it('merges character dialogue report rows across voice cue suffixes', () => {
+    const project = createEmptyProject()
+    project.blocks = [
+      createBlock('scene-heading', 'INT. CAFE - DAY'),
+      createBlock('character', 'MAYA'),
+      createBlock('dialogue', 'One two.'),
+      createBlock('character', 'MAYA (V.O.)'),
+      createBlock('dialogue', 'Three four.'),
+      createBlock('character', 'MAYA (O.S.)'),
+      createBlock('dialogue', 'Five six.'),
+    ]
+
+    const report = buildCharacterDialogueReport(project)
+
+    expect(report).toContain('MAYA | 3 | 3 | 6')
+    expect(report).not.toContain('MAYA (V.O.)')
+    expect(report).not.toContain('MAYA (O.S.)')
+  })
+
+  it('replaces open character parentheticals with screenplay voice cues', () => {
+    expect(insertCharacterVoiceCue('MAYA (', 'V.O.')).toEqual({
+      text: 'MAYA (V.O.)',
+      cursor: 11,
+    })
+    expect(insertCharacterVoiceCue('MAYA (o', 'O.S.')).toEqual({
+      text: 'MAYA (O.S.)',
+      cursor: 11,
+    })
   })
 
   it('creates revision snapshots that clone screenplay blocks', () => {

@@ -46,6 +46,25 @@ describe('character tools', () => {
     expect(stats.MAYA.dialogueWords).toBe(6)
   })
 
+  it('merges character stats across voice cue suffixes', () => {
+    const project = createEmptyProject()
+    project.blocks = [
+      createBlock('scene-heading', 'INT. CAFE - DAY'),
+      createBlock('character', 'MAYA'),
+      createBlock('dialogue', 'one two'),
+      createBlock('character', 'MAYA (V.O.)'),
+      createBlock('dialogue', 'three four'),
+      createBlock('character', 'MAYA (O.S.)'),
+      createBlock('dialogue', 'five six'),
+    ]
+
+    const stats = buildCharacterStats(project)
+
+    expect(Object.keys(stats)).toEqual(['MAYA'])
+    expect(stats.MAYA.dialogueLines).toBe(3)
+    expect(stats.MAYA.dialogueWords).toBe(6)
+  })
+
   it('builds dialogue distribution percentages for chart rendering', () => {
     const project = createEmptyProject()
     project.blocks = [

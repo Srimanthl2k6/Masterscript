@@ -79,6 +79,31 @@ describe('reports and analytics helpers', () => {
     })
   })
 
+  it('merges analytics report rows across voice cue suffixes', () => {
+    const project = createEmptyProject()
+    project.meta.includeTitlePage = false
+    project.blocks = [
+      createBlock('scene-heading', 'INT. CAFE - DAY'),
+      createBlock('character', 'MAYA'),
+      createBlock('dialogue', 'one two'),
+      createBlock('character', 'MAYA (V.O.)'),
+      createBlock('dialogue', 'three four'),
+      createBlock('character', 'MAYA (O.S.)'),
+      createBlock('dialogue', 'five six'),
+    ]
+
+    const characterRows = buildCharacterReport(project)
+    const dialogueRows = buildDialogueReport(project)
+
+    expect(characterRows.map((row) => row.character)).toEqual(['MAYA'])
+    expect(dialogueRows).toHaveLength(1)
+    expect(dialogueRows[0]).toMatchObject({
+      character: 'MAYA',
+      lines: 3,
+      words: 6,
+    })
+  })
+
   it('builds location and department reports', () => {
     const { project } = buildReportProject()
 

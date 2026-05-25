@@ -1,5 +1,5 @@
 import type { ProductivitySettings, ScriptProject } from '../types/screenplay'
-import { cloneProject } from './screenplay'
+import { cloneProject, normalizeCharacterName } from './screenplay'
 
 export interface GoalProgress {
   dailyPercent: number
@@ -172,7 +172,7 @@ export const buildReadThroughQueue = (project: ScriptProject): ReadThroughItem[]
 
   for (const block of project.blocks) {
     if (block.type === 'character') {
-      activeCharacter = block.text.trim().replace(/\(.+\)/, '').trim().toUpperCase()
+      activeCharacter = normalizeCharacterName(block.text)
       continue
     }
 
@@ -218,7 +218,7 @@ export const assignCharacterVoices = (
       continue
     }
 
-    const character = block.text.trim().replace(/\(.+\)/, '').trim().toUpperCase()
+    const character = normalizeCharacterName(block.text)
     if (character && !seen.has(character)) {
       seen.add(character)
       characters.push(character)

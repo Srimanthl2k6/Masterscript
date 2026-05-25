@@ -35,8 +35,9 @@ describe('workspace chrome UI', () => {
     expect(stylesheet).toContain('.right-outline-tab')
   })
 
-  it('keeps the draft formatter toolbar compact', () => {
+  it('keeps draft formatter labels on one line', () => {
     expect(stylesheet).toContain('height: 44px;')
-    expect(stylesheet).toContain('width: 68px;')
+    expect(stylesheet).toContain('width: 84px;')
+    expect(stylesheet).toContain('white-space: nowrap;')
   })
 })

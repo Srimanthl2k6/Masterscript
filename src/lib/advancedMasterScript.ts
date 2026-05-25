@@ -11,6 +11,7 @@ import {
   createBlock,
   createEmptyProject,
   extractScenes,
+  normalizeCharacterName,
   toFountain,
 } from './screenplay'
 import { parseSceneHeadingParts } from './sceneHeading'
@@ -466,7 +467,7 @@ const castInBlocks = (blocks: ScriptBlock[]): string[] =>
     ...new Set(
       blocks
         .filter((block) => block.type === 'character')
-        .map((block) => block.text.replace(/\(.+\)/, '').trim().toUpperCase())
+        .map((block) => normalizeCharacterName(block.text))
         .filter(Boolean),
     ),
   ].sort((left, right) => left.localeCompare(right))

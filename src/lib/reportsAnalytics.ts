@@ -3,7 +3,7 @@ import type {
   ScriptBlock,
   ScriptProject,
 } from '../types/screenplay'
-import { extractScenes, getScriptStats } from './screenplay'
+import { extractScenes, getScriptStats, normalizeCharacterName } from './screenplay'
 import { parseSceneHeadingParts } from './sceneHeading'
 
 export interface SceneReportRow {
@@ -119,7 +119,7 @@ const castForBlocks = (blocks: ScriptBlock[]): string[] =>
   [...new Set(
     blocks
       .filter((block) => block.type === 'character')
-      .map((block) => block.text.trim().replace(/\(.+\)/, '').trim().toUpperCase())
+      .map((block) => normalizeCharacterName(block.text))
       .filter(Boolean),
   )].sort((left, right) => left.localeCompare(right))
 
@@ -225,7 +225,7 @@ export const buildDialogueReport = (project: ScriptProject): DialogueReportRow[]
 
   for (const block of project.blocks) {
     if (block.type === 'character') {
-      activeCharacter = block.text.trim().replace(/\(.+\)/, '').trim().toUpperCase() || null
+      activeCharacter = normalizeCharacterName(block.text) || null
       if (activeCharacter && !stats.has(activeCharacter)) {
         stats.set(activeCharacter, { lines: 0, words: 0 })
       }

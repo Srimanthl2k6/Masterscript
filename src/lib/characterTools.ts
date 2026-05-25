@@ -6,7 +6,12 @@ import type {
 } from '../types/screenplay'
 import { paginateProjectForPrint } from './adapters/pagination'
 import { renameCharacterAcrossProject } from './formattingEngine'
-import { cloneProject, collectCharacterSuggestions, extractScenes } from './screenplay'
+import {
+  cloneProject,
+  collectCharacterSuggestions,
+  extractScenes,
+  normalizeCharacterName,
+} from './screenplay'
 
 export interface CharacterStats {
   character: string
@@ -118,7 +123,7 @@ export const buildCharacterStats = (
     }
 
     if (block.type === 'character') {
-      activeCharacter = normalizeName(block.text.replace(/\(.+\)/, ''))
+      activeCharacter = normalizeCharacterName(block.text)
       ensure(activeCharacter)
       if (!scenesByCharacter.has(activeCharacter)) {
         scenesByCharacter.set(activeCharacter, new Set())
@@ -149,7 +154,7 @@ export const buildCharacterStats = (
   for (const name of Object.keys(stats)) {
     const pages = new Set<number>()
     for (const block of project.blocks) {
-      if (block.type === 'character' && normalizeName(block.text.replace(/\(.+\)/, '')) === name) {
+      if (block.type === 'character' && normalizeCharacterName(block.text) === name) {
         const pageNumber = pageByBlock.get(block.id)
         if (pageNumber) {
           pages.add(pageNumber)

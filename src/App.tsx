@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent } from 'react'
 import CommandPalette, { type CommandResult } from './components/CommandPalette'
 import { useCollaborationSession, type CollaborationStatus } from './lib/collaboration/useCollaborationSession'
@@ -37,10 +37,12 @@ import {
   extractScenes,
   generateProductionBreakdown,
   getScriptStats,
+  insertCharacterVoiceCue,
   nextTypeForEnter,
   screenplayKeyboardCycle,
   summarizeRevisionSnapshotDiff,
   toFountain,
+  type CharacterVoiceCue,
 } from './lib/screenplay'
 import {
   beginNextRevisionSet,
@@ -259,6 +261,10 @@ const recentProjectsKey = 'masterscript-recent-v1'
 const recentProjectSnapshotsKey = 'masterscript-recent-project-snapshots-v1'
 const defaultPreviewZoom = 0.82
 const useContinuousDraftEditor = false
+const characterVoiceCueOptions: Array<{ label: string; cue: CharacterVoiceCue }> = [
+  { label: 'Voice Over', cue: 'V.O.' },
+  { label: 'Off Screen', cue: 'O.S.' },
+]
 
 const blockTypePlaceholders: Record<BlockType, string> = {
   'scene-heading': 'INT. LOCATION - DAY',
@@ -1369,6 +1375,23 @@ function App() {
       .slice(0, 8)
   }, [characterSuggestions, selectedBlock])
 
+  const activeCharacterVoiceCueSuggestions = useMemo(() => {
+    if (!selectedBlock || selectedBlock.type !== 'character') {
+      return [] as typeof characterVoiceCueOptions
+    }
+
+    const openParenIndex = selectedBlock.text.lastIndexOf('(')
+    if (
+      openParenIndex < 0 ||
+      selectedBlock.text.slice(openParenIndex).includes(')') ||
+      !selectedBlock.text.slice(0, openParenIndex).trim()
+    ) {
+      return [] as typeof characterVoiceCueOptions
+    }
+
+    return characterVoiceCueOptions
+  }, [selectedBlock])
+
   const snapshotOptions = useMemo<SnapshotOption[]>(
     () =>
       project.revisionSnapshots.map((snapshot) => ({
@@ -1709,6 +1732,7 @@ function App() {
   const itemRefs = useRef<Record<string, HTMLElement | null>>({})
   const pendingFocusId = useRef<string | null>(null)
   const pendingBlockSelection = useRef<QueuedSelection | null>(null)
+  const pendingFocusShouldScroll = useRef(true)
   const pendingContinuousCursor = useRef<number | null>(null)
   const pendingScrollId = useRef<string | null>(null)
   const autoFocusedProjectId = useRef<string | null>(null)
@@ -1885,17 +1909,28 @@ function App() {
     const end = selection ? Math.min(selection.end, node.value.length) : start
 
     node.focus()
-    node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (pendingFocusShouldScroll.current) {
+      node.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
     node.setSelectionRange(start, end)
     pendingFocusId.current = null
     pendingBlockSelection.current = null
+    pendingFocusShouldScroll.current = true
   }, [])
 
   const queueFocus = useCallback(
-    (id: string, selection?: Omit<QueuedSelection, 'id'>) => {
+    (
+      id: string,
+      selection?: Omit<QueuedSelection, 'id'>,
+      options: { highlight?: boolean; scroll?: boolean } = {},
+    ) => {
+      const shouldHighlight = options.highlight ?? true
       pendingFocusId.current = id
       pendingBlockSelection.current = selection ? { id, ...selection } : null
-      setHighlightedId(id)
+      pendingFocusShouldScroll.current = options.scroll ?? true
+      if (shouldHighlight) {
+        setHighlightedId(id)
+      }
       window.requestAnimationFrame(focusQueuedBlock)
     },
     [focusQueuedBlock],
@@ -2087,12 +2122,13 @@ function App() {
     collaboration.syncProject(project)
   }, [collaboration, project])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     focusQueuedBlock()
 
     if (useContinuousDraftEditor) {
       pendingFocusId.current = null
       pendingBlockSelection.current = null
+      pendingFocusShouldScroll.current = true
     }
   }, [focusQueuedBlock, project.blocks])
 
@@ -2349,13 +2385,19 @@ function App() {
     }
   }
 
-  const onBlockTextChange = (blockId: string, text: string) => {
+  const onBlockTextChange = (
+    blockId: string,
+    text: string,
+    selection?: Omit<QueuedSelection, 'id'>,
+  ) => {
     const result = updateBlockTextWithRevisionTracking(project, blockId, text)
     if (result.blocked) {
       setStatusMessage('Locked scene or page prevented edit')
       return
     }
 
+    setSelectedBlockId(blockId)
+    queueFocus(blockId, selection, { highlight: false, scroll: false })
     setHistory((previous) => ({
       past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
       present: {
@@ -4791,6 +4833,19 @@ function App() {
     queueFocus(blockId)
   }
 
+  const applyCharacterVoiceCue = (blockId: string, cue: CharacterVoiceCue) => {
+    const targetBlock = project.blocks.find((block) => block.id === blockId)
+    if (!targetBlock || targetBlock.type !== 'character') {
+      return
+    }
+
+    const result = insertCharacterVoiceCue(targetBlock.text, cue)
+    onBlockTextChange(blockId, result.text, {
+      start: result.cursor,
+      end: result.cursor,
+    })
+  }
+
   const insertTextIntoActiveBlock = (text: string) => {
     const targetId = activeBlockId
     if (!targetId) {
@@ -4811,7 +4866,7 @@ function App() {
 
     setSelectedBlockId(targetId)
     queueFocus(targetId, { start: nextCursor, end: nextCursor })
-    onBlockTextChange(targetId, nextText)
+    onBlockTextChange(targetId, nextText, { start: nextCursor, end: nextCursor })
   }
 
   const exportCharacterDialogueReport = () => {
@@ -5565,7 +5620,13 @@ function App() {
                                 setSelectedSceneId(block.id)
                               }
                             }}
-                            onChange={(event) => onBlockTextChange(block.id, event.target.value)}
+                            onChange={(event) =>
+                              onBlockTextChange(
+                                block.id,
+                                event.target.value,
+                                getTextareaSelection(event.currentTarget),
+                              )
+                            }
                             onKeyDown={(event) =>
                               onBlockKeyDown(event, index, block.id, block.type)
                             }
@@ -5575,6 +5636,26 @@ function App() {
 
                           {block.type === 'character' &&
                             activeBlockId === block.id &&
+                            activeCharacterVoiceCueSuggestions.length > 0 && (
+                              <div className="character-suggestions" role="listbox">
+                                {activeCharacterVoiceCueSuggestions.map((option) => (
+                                  <button
+                                    key={`${block.id}-${option.cue}`}
+                                    className="character-suggestion-btn"
+                                    onMouseDown={(event) => {
+                                      event.preventDefault()
+                                      applyCharacterVoiceCue(block.id, option.cue)
+                                    }}
+                                  >
+                                    {option.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                          {block.type === 'character' &&
+                            activeBlockId === block.id &&
+                            activeCharacterVoiceCueSuggestions.length === 0 &&
                             activeCharacterSuggestions.length > 0 && (
                               <div className="character-suggestions" role="listbox">
                                 {activeCharacterSuggestions.map((name) => (

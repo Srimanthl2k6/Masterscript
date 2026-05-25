@@ -1422,8 +1422,8 @@ button:focus-visible {
 }
 
 .format-btn {
-  width: 68px;
-  min-width: 68px;
+  width: 84px;
+  min-width: 84px;
   height: 44px;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -1441,7 +1441,7 @@ button:focus-visible {
   letter-spacing: 0.04em;
   font-weight: 600;
   line-height: 1.1;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .format-btn.active,
@@ -3166,8 +3166,8 @@ kbd {
   }
 
   .format-btn {
-    width: 64px;
-    min-width: 64px;
+    width: 80px;
+    min-width: 80px;
     height: 42px;
   }
 
