@@ -82,4 +82,36 @@ describe('paginateBlocksForEditor', () => {
     expect(pages[0].scriptPageNumber).toBe(1)
     expect(pages[0].showPageNumber).toBe(false)
   })
+
+  it('assigns a scene heading and its following action to the same editor page', () => {
+    const project = createEmptyProject()
+    project.meta.includeTitlePage = false
+    const heading = createBlock('scene-heading', 'EXT. ROOFTOP - NIGHT')
+    const action = createBlock('action', 'The city waits below.')
+    project.blocks = [
+      createBlock(
+        'action',
+        Array.from({ length: 9 }, (_, index) => `Setup beat ${index}.`).join('\n'),
+      ),
+      heading,
+      action,
+    ]
+    const layout = paginateProjectForPrint(project, {
+      pageHeight: 210,
+      marginTop: 36,
+      marginBottom: 36,
+      lineHeight: 12,
+    })
+
+    const pages = paginateBlocksForEditor(project, layout)
+    const headingPage = pages.find((page) =>
+      page.blocks.some((block) => block.id === heading.id),
+    )
+    const actionPage = pages.find((page) =>
+      page.blocks.some((block) => block.id === action.id),
+    )
+
+    expect(headingPage?.scriptPageNumber).toBe(2)
+    expect(actionPage?.scriptPageNumber).toBe(headingPage?.scriptPageNumber)
+  })
 })

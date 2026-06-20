@@ -322,6 +322,63 @@ export const paginateProjectForPrint = (
   const pages: PrintLayoutPage[] = []
   let scriptPageCounter = 1
   let lineCounter = 0
+  const preparedBlocks = project.blocks.map((block) => {
+    const cleaned = compactText(block.text)
+    const style = getBlockStyle(block.type, contentWidth, block)
+    const content = style.uppercase ? cleaned.toUpperCase() : cleaned
+    const maxChars = widthToMaxChars(
+      style.maxWidth,
+      config.fontSize,
+      config.charWidthFactor,
+    )
+
+    return {
+      block,
+      cleaned,
+      style,
+      lines: wrapBlockText(content, maxChars),
+    }
+  })
+  const nextPrintableBlockIndex = new Array<number | null>(
+    preparedBlocks.length,
+  ).fill(null)
+  let nextPrintableIndex: number | null = null
+
+  for (let blockIndex = preparedBlocks.length - 1; blockIndex >= 0; blockIndex -= 1) {
+    nextPrintableBlockIndex[blockIndex] = nextPrintableIndex
+    if (preparedBlocks[blockIndex].lines.length > 0) {
+      nextPrintableIndex = blockIndex
+    }
+  }
+
+  const minimumPlacementHeight = (blockIndex: number): number => {
+    const prepared = preparedBlocks[blockIndex]
+    if (!prepared || prepared.lines.length === 0) {
+      return 0
+    }
+
+    const { block, style } = prepared
+    let height = style.spacingBefore + config.lineHeight
+    const followingPrintableIndex = nextPrintableBlockIndex[blockIndex]
+    const followingPrintable =
+      followingPrintableIndex === null
+        ? null
+        : preparedBlocks[followingPrintableIndex]
+
+    if (
+      block.type === 'character' &&
+      followingPrintable &&
+      (followingPrintable.block.type === 'dialogue' ||
+        followingPrintable.block.type === 'parenthetical')
+    ) {
+      height +=
+        style.spacingAfter +
+        followingPrintable.style.spacingBefore +
+        config.lineHeight
+    }
+
+    return height
+  }
 
   const addPage = (kind: 'title' | 'script'): PrintLayoutPage => {
     const page: PrintLayoutPage = {
@@ -559,9 +616,8 @@ export const paginateProjectForPrint = (
     y -= config.lineHeight
   }
 
-  for (let blockIndex = 0; blockIndex < project.blocks.length; blockIndex += 1) {
-    const block = project.blocks[blockIndex]
-    const cleaned = compactText(block.text)
+  for (let blockIndex = 0; blockIndex < preparedBlocks.length; blockIndex += 1) {
+    const { block, cleaned, style, lines } = preparedBlocks[blockIndex]
     if (!cleaned) {
       continue
     }
@@ -579,32 +635,25 @@ export const paginateProjectForPrint = (
       activeDialogueCharacter = null
     }
 
-    const style = getBlockStyle(block.type, contentWidth, block)
-    const content = style.uppercase ? cleaned.toUpperCase() : cleaned
-    const maxChars = widthToMaxChars(
-      style.maxWidth,
-      config.fontSize,
-      config.charWidthFactor,
-    )
-    const lines = wrapBlockText(content, maxChars)
-
     if (lines.length === 0) {
       continue
     }
 
-    const nextBlock = project.blocks[blockIndex + 1]
-    const needsCharacterPair =
-      block.type === 'character' &&
-      nextBlock &&
-      (nextBlock.type === 'dialogue' || nextBlock.type === 'parenthetical')
-    const nextStyle = nextBlock ? getBlockStyle(nextBlock.type, contentWidth, nextBlock) : null
-    const neededHeight = needsCharacterPair
-      ? style.spacingBefore +
-        config.lineHeight +
+    let neededHeight = minimumPlacementHeight(blockIndex)
+    const followingPrintableIndex = nextPrintableBlockIndex[blockIndex]
+
+    if (block.type === 'scene-heading' && followingPrintableIndex !== null) {
+      const sceneHeadingGroupHeight =
+        style.spacingBefore +
+        lines.length * config.lineHeight +
         style.spacingAfter +
-        (nextStyle?.spacingBefore ?? 0) +
-        config.lineHeight
-      : style.spacingBefore + config.lineHeight
+        minimumPlacementHeight(followingPrintableIndex)
+      const freshPageY = config.pageHeight - config.marginTop
+
+      if (freshPageY - sceneHeadingGroupHeight >= config.marginBottom) {
+        neededHeight = sceneHeadingGroupHeight
+      }
+    }
 
     if (y - neededHeight < config.marginBottom) {
       moveToNextScriptPage()

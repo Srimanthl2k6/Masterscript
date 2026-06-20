@@ -2,6 +2,21 @@ import { describe, expect, it } from 'vitest'
 import { paginateProjectForPrint } from './pagination'
 import { createBlock, createEmptyProject } from '../screenplay'
 
+const boundaryLayout = {
+  pageHeight: 210,
+  marginTop: 36,
+  marginBottom: 36,
+  lineHeight: 12,
+}
+
+const bodyPageForBlock = (
+  layout: ReturnType<typeof paginateProjectForPrint>,
+  blockId: string,
+): number | null | undefined =>
+  layout.pages.find((page) =>
+    page.lines.some((line) => line.role === 'body' && line.blockId === blockId),
+  )?.scriptPageNumber
+
 describe('paginateProjectForPrint', () => {
   it('creates title and script pages by default', () => {
     const project = createEmptyProject()
@@ -122,6 +137,116 @@ describe('paginateProjectForPrint', () => {
       const bodyLines = page.lines.filter((line) => line.role === 'body')
       expect(bodyLines.at(-1)?.text).not.toBe('JON')
     }
+  })
+
+  it('moves a scene heading to the next page with the following action line', () => {
+    const project = createEmptyProject()
+    project.meta.includeTitlePage = false
+    const heading = createBlock('scene-heading', 'EXT. ROOFTOP - NIGHT')
+    const action = createBlock('action', 'The city waits below.')
+    project.blocks = [
+      createBlock(
+        'action',
+        Array.from({ length: 9 }, (_, index) => `Setup beat ${index}.`).join('\n'),
+      ),
+      heading,
+      action,
+    ]
+
+    const layout = paginateProjectForPrint(project, boundaryLayout)
+
+    expect(bodyPageForBlock(layout, heading.id)).toBe(2)
+    expect(bodyPageForBlock(layout, action.id)).toBe(2)
+  })
+
+  it('keeps a scene heading with a following character cue and dialogue line', () => {
+    const project = createEmptyProject()
+    project.meta.includeTitlePage = false
+    const heading = createBlock('scene-heading', 'INT. OFFICE - NIGHT')
+    const character = createBlock('character', 'MAYA')
+    const dialogue = createBlock('dialogue', 'We leave now.')
+    project.blocks = [
+      createBlock(
+        'action',
+        Array.from({ length: 8 }, (_, index) => `Setup beat ${index}.`).join('\n'),
+      ),
+      heading,
+      character,
+      dialogue,
+    ]
+
+    const layout = paginateProjectForPrint(project, boundaryLayout)
+
+    expect(bodyPageForBlock(layout, heading.id)).toBe(2)
+    expect(bodyPageForBlock(layout, character.id)).toBe(2)
+    expect(bodyPageForBlock(layout, dialogue.id)).toBe(2)
+  })
+
+  it('skips empty blocks when keeping a scene heading with the next printable line', () => {
+    const project = createEmptyProject()
+    project.meta.includeTitlePage = false
+    const heading = createBlock('scene-heading', 'EXT. ALLEY - NIGHT')
+    const emptyAction = createBlock('action', '')
+    const action = createBlock('action', 'Rain needles the pavement.')
+    project.blocks = [
+      createBlock(
+        'action',
+        Array.from({ length: 9 }, (_, index) => `Setup beat ${index}.`).join('\n'),
+      ),
+      heading,
+      emptyAction,
+      action,
+    ]
+
+    const layout = paginateProjectForPrint(project, boundaryLayout)
+
+    expect(bodyPageForBlock(layout, heading.id)).toBe(2)
+    expect(bodyPageForBlock(layout, action.id)).toBe(2)
+  })
+
+  it('keeps every wrapped scene-heading line with the next printable line', () => {
+    const project = createEmptyProject()
+    project.meta.includeTitlePage = false
+    const heading = createBlock(
+      'scene-heading',
+      'INT. A VERY LONG INDUSTRIAL RESEARCH FACILITY WITH A GLASS ATRIUM - NIGHT',
+    )
+    const action = createBlock('action', 'Emergency lights pulse.')
+    project.blocks = [
+      createBlock(
+        'action',
+        Array.from({ length: 8 }, (_, index) => `Setup beat ${index}.`).join('\n'),
+      ),
+      heading,
+      action,
+    ]
+
+    const layout = paginateProjectForPrint(project, boundaryLayout)
+    const headingLines = layout.pages.flatMap((page) =>
+      page.lines.filter((line) => line.role === 'body' && line.blockId === heading.id),
+    )
+
+    expect(headingLines.length).toBeGreaterThan(1)
+    expect(new Set(headingLines.map((line) => line.pageIndex))).toHaveLength(1)
+    expect(bodyPageForBlock(layout, heading.id)).toBe(2)
+    expect(bodyPageForBlock(layout, action.id)).toBe(2)
+  })
+
+  it('does not force a page break for a final scene heading without following content', () => {
+    const project = createEmptyProject()
+    project.meta.includeTitlePage = false
+    const heading = createBlock('scene-heading', 'EXT. EMPTY ROAD - DAWN')
+    project.blocks = [
+      createBlock(
+        'action',
+        Array.from({ length: 9 }, (_, index) => `Setup beat ${index}.`).join('\n'),
+      ),
+      heading,
+    ]
+
+    const layout = paginateProjectForPrint(project, boundaryLayout)
+
+    expect(bodyPageForBlock(layout, heading.id)).toBe(1)
   })
 
   it('renders dual dialogue in side-by-side columns', () => {

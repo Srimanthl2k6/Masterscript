@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { workspaceFileMenuGroups } from './workspaceFileMenu'
 
 const stylesheet = readFileSync('src/index.css', 'utf8')
+const appSource = readFileSync('src/App.tsx', 'utf8')
 
 describe('workspace chrome UI', () => {
   it('moves project, import, export, view, theme, snapshot, and edit actions into File', () => {
@@ -39,5 +40,31 @@ describe('workspace chrome UI', () => {
     expect(stylesheet).toContain('height: 44px;')
     expect(stylesheet).toContain('width: 84px;')
     expect(stylesheet).toContain('white-space: nowrap;')
+  })
+
+  it('renders Find and Replace as a non-modal widget inside the editor shell', () => {
+    const findReplaceStart = appSource.indexOf('{isFindReplaceOpen && (')
+    const formatterToolbarStart = appSource.indexOf(
+      "{activeTab === 'draft' && !useContinuousDraftEditor && (",
+      findReplaceStart,
+    )
+    const editorShellStart = appSource.lastIndexOf(
+      '<main className="editor-shell">',
+      findReplaceStart,
+    )
+    const editorShellEnd = appSource.indexOf('</main>', findReplaceStart)
+    const findReplaceMarkup = appSource.slice(findReplaceStart, formatterToolbarStart)
+
+    expect(findReplaceStart).toBeGreaterThan(-1)
+    expect(formatterToolbarStart).toBeGreaterThan(findReplaceStart)
+    expect(editorShellStart).toBeGreaterThan(-1)
+    expect(editorShellEnd).toBeGreaterThan(findReplaceStart)
+    expect(findReplaceMarkup).toContain(
+      'className="find-replace-panel find-replace-widget"',
+    )
+    expect(findReplaceMarkup).not.toContain('className="palette-overlay"')
+    expect(stylesheet).toMatch(
+      /\.find-replace-widget\s*{[^}]*position:\s*absolute;[^}]*top:[^}]*right:[^}]*z-index:/s,
+    )
   })
 })

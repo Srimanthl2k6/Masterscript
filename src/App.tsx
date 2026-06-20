@@ -7703,6 +7703,67 @@ function App() {
             )}
           </div>
 
+          {isFindReplaceOpen && (
+            <section
+              className="find-replace-panel find-replace-widget"
+              role="search"
+              aria-label="Find and Replace"
+            >
+              <div className="find-replace-head">
+                <strong>Find and Replace</strong>
+                <button className="tiny-btn" onClick={closeFindReplace}>
+                  Close
+                </button>
+              </div>
+
+              <div className="find-replace-grid">
+                <label>
+                  <span>Find</span>
+                  <input
+                    ref={findInputRef}
+                    value={findQuery}
+                    onChange={(event) => {
+                      setFindQuery(event.target.value)
+                      setFindCursor(0)
+                    }}
+                    placeholder="Find text in screenplay"
+                  />
+                </label>
+                <label>
+                  <span>Replace</span>
+                  <input
+                    value={replaceQuery}
+                    onChange={(event) => setReplaceQuery(event.target.value)}
+                    placeholder="Replacement text"
+                  />
+                </label>
+              </div>
+
+              <div className="find-replace-controls">
+                <label className="toggle-row compact">
+                  <input
+                    type="checkbox"
+                    checked={findCaseSensitive}
+                    onChange={(event) => {
+                      setFindCaseSensitive(event.target.checked)
+                      setFindCursor(0)
+                    }}
+                  />
+                  <span>Case sensitive</span>
+                </label>
+                <p className="small-copy">
+                  {findMatches.length} match{findMatches.length === 1 ? '' : 'es'}
+                </p>
+              </div>
+
+              <div className="inline-actions">
+                <button onClick={jumpToNextFindMatch}>Find Next</button>
+                <button onClick={replaceNextFindMatch}>Replace Next</button>
+                <button onClick={replaceAllFindMatches}>Replace All</button>
+              </div>
+            </section>
+          )}
+
           {activeTab === 'draft' && !useContinuousDraftEditor && (
             <div className="floating-toolbar" data-purpose="formatter-toolbar">
               <button
@@ -8235,65 +8296,6 @@ function App() {
               <button onClick={() => void stopCollaboration()} disabled={!collaboration.isActive}>
                 Stop
               </button>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {isFindReplaceOpen && (
-        <div className="palette-overlay" onMouseDown={closeFindReplace}>
-          <section className="find-replace-panel" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="find-replace-head">
-              <strong>Find and Replace</strong>
-              <button className="tiny-btn" onClick={closeFindReplace}>
-                Close
-              </button>
-            </div>
-
-            <div className="find-replace-grid">
-              <label>
-                <span>Find</span>
-                <input
-                  ref={findInputRef}
-                  value={findQuery}
-                  onChange={(event) => {
-                    setFindQuery(event.target.value)
-                    setFindCursor(0)
-                  }}
-                  placeholder="Find text in screenplay"
-                />
-              </label>
-              <label>
-                <span>Replace</span>
-                <input
-                  value={replaceQuery}
-                  onChange={(event) => setReplaceQuery(event.target.value)}
-                  placeholder="Replacement text"
-                />
-              </label>
-            </div>
-
-            <div className="find-replace-controls">
-              <label className="toggle-row compact">
-                <input
-                  type="checkbox"
-                  checked={findCaseSensitive}
-                  onChange={(event) => {
-                    setFindCaseSensitive(event.target.checked)
-                    setFindCursor(0)
-                  }}
-                />
-                <span>Case sensitive</span>
-              </label>
-              <p className="small-copy">
-                {findMatches.length} match{findMatches.length === 1 ? '' : 'es'}
-              </p>
-            </div>
-
-            <div className="inline-actions">
-              <button onClick={jumpToNextFindMatch}>Find Next</button>
-              <button onClick={replaceNextFindMatch}>Replace Next</button>
-              <button onClick={replaceAllFindMatches}>Replace All</button>
             </div>
           </section>
         </div>

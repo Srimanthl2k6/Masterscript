@@ -2338,6 +2338,15 @@ kbd {
   padding: 0.85rem;
 }
 
+.find-replace-widget {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 50;
+  max-height: calc(100% - 2rem);
+  overflow-y: auto;
+}
+
 .find-replace-head {
   display: flex;
   justify-content: space-between;
@@ -3177,6 +3186,13 @@ kbd {
 
   .find-replace-grid {
     grid-template-columns: 1fr;
+  }
+
+  .find-replace-widget {
+    top: 0.6rem;
+    right: 0.6rem;
+    width: calc(100% - 1.2rem);
+    max-height: calc(100% - 1.2rem);
   }
 
   .snapshot-layout {
