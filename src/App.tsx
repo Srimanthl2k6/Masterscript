@@ -78,10 +78,12 @@ import {
   buildCharacterStats,
   buildDialogueDistribution,
   ensureProfilesFromScript,
+  removeCharacterRelationship,
   renameCharacterEverywhere,
   setCharacterArcStage,
   upsertCharacterProfile,
 } from './lib/characterTools'
+import { handleFindInputKeyDown } from './lib/findReplace'
 import {
   assignCharacterVoices,
   buildReadThroughQueue,
@@ -4798,6 +4800,13 @@ function App() {
     setStatusMessage('Added character relationship')
   }
 
+  const removeSelectedCharacterRelationship = (relationshipId: string) => {
+    commit((draft) => {
+      const updated = removeCharacterRelationship(draft, relationshipId)
+      draft.characters = updated.characters
+    }, 'Removed character relationship')
+  }
+
   const updateSelectedCharacterArc = (stage: CharacterArcStage) => {
     if (!resolvedCharacterName || !resolvedSelectedSceneId) {
       setStatusMessage('Select a character and scene before setting arc stage')
@@ -7644,9 +7653,18 @@ function App() {
                     <button onClick={addSelectedCharacterRelationship}>Add Relationship</button>
                     <div className="relationship-list">
                       {(project.characters?.relationships ?? []).map((edge) => (
-                        <span key={edge.id}>
-                          {edge.from} - {edge.label} - {edge.to}
-                        </span>
+                        <div className="relationship-row" key={edge.id}>
+                          <span>
+                            {edge.from} - {edge.label} - {edge.to}
+                          </span>
+                          <button
+                            className="tiny-btn"
+                            onClick={() => removeSelectedCharacterRelationship(edge.id)}
+                            aria-label={`Remove relationship between ${edge.from} and ${edge.to}`}
+                          >
+                            Remove
+                          </button>
+                        </div>
                       ))}
                     </div>
                     <label>
@@ -7742,6 +7760,9 @@ function App() {
                       setFindQuery(event.target.value)
                       setFindCursor(0)
                     }}
+                    onKeyDown={(event) =>
+                      handleFindInputKeyDown(event, jumpToNextFindMatch)
+                    }
                     placeholder="Find text in screenplay"
                   />
                 </label>

@@ -4,6 +4,7 @@ import {
   addCharacterRelationship,
   buildCharacterStats,
   buildDialogueDistribution,
+  removeCharacterRelationship,
   renameCharacterEverywhere,
   setCharacterArcStage,
   upsertCharacterProfile,
@@ -96,6 +97,21 @@ describe('character tools', () => {
       to: 'JON',
       label: 'siblings',
     })
+  })
+
+  it('removes a relationship by ID without mutating the source project', () => {
+    const project = addCharacterRelationship(
+      createEmptyProject(),
+      'Maya',
+      'Jon',
+      'siblings',
+    )
+    const relationshipId = project.characters.relationships[0].id
+
+    const updated = removeCharacterRelationship(project, relationshipId)
+
+    expect(updated.characters.relationships).toEqual([])
+    expect(project.characters.relationships).toHaveLength(1)
   })
 
   it('tracks character arc stage per scene', () => {

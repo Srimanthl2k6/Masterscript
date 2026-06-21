@@ -214,6 +214,17 @@ export const addCharacterRelationship = (
   return next
 }
 
+export const removeCharacterRelationship = (
+  project: ScriptProject,
+  relationshipId: string,
+): ScriptProject => {
+  const next = ensureCharacterToolsState(project)
+  next.characters!.relationships = next.characters!.relationships.filter(
+    (relationship) => relationship.id !== relationshipId,
+  )
+  return next
+}
+
 export const setCharacterArcStage = (
   project: ScriptProject,
   character: string,

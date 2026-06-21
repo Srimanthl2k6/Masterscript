@@ -67,4 +67,15 @@ describe('workspace chrome UI', () => {
       /\.find-replace-widget\s*{[^}]*position:\s*absolute;[^}]*top:[^}]*right:[^}]*z-index:/s,
     )
   })
+
+  it('runs Find Next from Enter in the Find input', () => {
+    expect(appSource).toContain('handleFindInputKeyDown(event, jumpToNextFindMatch)')
+  })
+
+  it('renders relationship removal through the normal undoable commit path', () => {
+    expect(appSource).toContain('const removeSelectedCharacterRelationship')
+    expect(appSource).toContain('removeCharacterRelationship(draft, relationshipId)')
+    expect(appSource).toContain('onClick={() => removeSelectedCharacterRelationship(edge.id)}')
+    expect(appSource).toContain('Remove')
+  })
 })

@@ -680,6 +680,18 @@ button:focus-visible {
   font-size: 11px;
 }
 
+.relationship-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.relationship-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .productivity-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
