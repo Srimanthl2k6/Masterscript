@@ -363,8 +363,8 @@ pub async fn project_export_pdf(title: String, base64: String) -> OperationResul
 pub async fn collaboration_lan_host(
     state: State<'_, LanRelayState>,
     options: LanHostOptions,
-) -> LanHostResult {
-    state.host(options).await
+) -> Result<LanHostResult, String> {
+    Ok(state.host(options).await)
 }
 
 #[tauri::command]
@@ -373,14 +373,18 @@ pub async fn collaboration_lan_join(options: LanJoinOptions) -> LanJoinResult {
 }
 
 #[tauri::command]
-pub async fn collaboration_lan_stop(state: State<'_, LanRelayState>) -> OperationResult {
+pub async fn collaboration_lan_stop(
+    state: State<'_, LanRelayState>,
+) -> Result<OperationResult, String> {
     state.stop().await;
-    OperationResult::success(None)
+    Ok(OperationResult::success(None))
 }
 
 #[tauri::command]
-pub async fn collaboration_lan_status(state: State<'_, LanRelayState>) -> LanHostResult {
-    state.status().await
+pub async fn collaboration_lan_status(
+    state: State<'_, LanRelayState>,
+) -> Result<LanHostResult, String> {
+    Ok(state.status().await)
 }
 
 #[tauri::command]

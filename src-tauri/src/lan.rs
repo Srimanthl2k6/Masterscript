@@ -85,9 +85,10 @@ fn is_state_message(message: &Message) -> bool {
 async fn handle_peer(stream: TcpStream, rooms: Arc<Mutex<RelayRooms>>, fallback_room: String) {
     let selected_room = Arc::new(std::sync::Mutex::new(fallback_room.clone()));
     let callback_room = selected_room.clone();
+    let callback_fallback_room = fallback_room.clone();
     let websocket = accept_hdr_async(stream, move |request: &Request, response: Response| {
         if let Ok(mut room) = callback_room.lock() {
-            *room = room_from_request(request, &fallback_room);
+            *room = room_from_request(request, &callback_fallback_room);
         }
         Ok(response)
     })
