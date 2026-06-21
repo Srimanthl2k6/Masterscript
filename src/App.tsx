@@ -1,4 +1,14 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  Fragment,
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import type { ChangeEvent, KeyboardEvent } from 'react'
 import CommandPalette, { type CommandResult } from './components/CommandPalette'
 import { useCollaborationSession, type CollaborationStatus } from './lib/collaboration/useCollaborationSession'
@@ -97,74 +107,40 @@ import {
 } from './lib/productivity'
 import {
   addShotToScene,
-  buildCallSheet,
-  buildDoodGrid,
-  buildDoodGridCsv,
-  buildScriptSides,
   buildShotListCsv,
   buildShotListRows,
   buildStoryboardExportPages,
-  buildStripboard,
   exportTextReportToPdf,
   reorderStripboard,
 } from './lib/productionTools'
 import {
-  autoTagScript,
   buildBreakdownCsv,
-  buildBreakdownSheet,
-  buildTagCatalog,
   departmentTagCategories,
-  departmentTagColors,
   tagScriptSelection,
   updateTagCatalogItem,
+  type AutoTagSuggestion,
 } from './lib/taggingBreakdown'
-import {
-  buildAnalyticsDashboard,
-  buildCharacterReport,
-  buildDepartmentReport,
-  buildDialogueReport,
-  buildLocationReport,
-  buildPageSceneSummary,
-  buildReportCsv,
-  buildSceneReport,
-} from './lib/reportsAnalytics'
 import {
   addCoverageRecord,
   addParkingLotScene,
   addRevisionDistribution,
   beginProductionDraft as beginAdvancedProductionDraft,
-  buildAccessibilityExports,
-  buildAdvancedNavigatorRows,
-  buildAdvancedSidesPackage,
   buildCoveragePdfLines,
   buildFormatTemplateProject,
-  buildLegalWorkflowLinks,
   buildOneLinerSchedule,
-  buildPrintExportSettings,
   buildRevisionDistributionCsv,
-  buildRevisionSlugList,
-  buildScriptCheck,
-  buildSeriesReviewFlags,
   buildTableReadDraftText,
   buildTableReadExportOptions,
-  buildTimingReport,
-  buildTitlePageWarnings,
-  buildWatermarkDescriptor,
-  createDigitalSidesLink,
   createPdfExportProject,
-  currentYearCopyright,
   exportHtmlProject,
   exportReportWorkbookXml,
   exportRtfProject,
   exportSceneListCsv,
   exportTxtProject,
-  scriptFormatPresets,
-  smartTypeExtensions,
-  smartTypeTimesOfDay,
-  smartTypeTransitions,
-  technicalElementTemplates,
   updateAdvancedSettings,
 } from './lib/advancedMasterScript'
+import type { ReportView } from './workspaces/reportModel'
+import WorkspaceFallback from './workspaces/WorkspaceFallback'
 import {
   blockTypeOrder,
   blockTypeLabels,
@@ -210,21 +186,10 @@ const collaborationStatusLabels: Record<CollaborationStatus, string> = {
   reconnecting: 'Reconnecting',
 }
 
-type ReportView =
-  | 'scene'
-  | 'character'
-  | 'location'
-  | 'department'
-  | 'dialogue'
-  | 'summary'
-  | 'analytics'
-type ReportCell = string | number | string[]
-
-interface CurrentReport {
-  title: string
-  headers: string[]
-  rows: ReportCell[][]
-}
+const ProductionWorkspace = lazy(() => import('./workspaces/ProductionWorkspace'))
+const BreakdownWorkspace = lazy(() => import('./workspaces/BreakdownWorkspace'))
+const ReportsWorkspace = lazy(() => import('./workspaces/ReportsWorkspace'))
+const AdvancedWorkspace = lazy(() => import('./workspaces/AdvancedWorkspace'))
 
 interface HistoryState {
   past: ScriptProject[]
@@ -546,9 +511,6 @@ const formatTimer = (totalSeconds: number): string => {
   const seconds = safeSeconds % 60
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
-
-const formatReportCell = (value: ReportCell): string =>
-  Array.isArray(value) ? value.join(', ') : String(value)
 
 const reorderById = <T extends { id: string }>(
   items: T[],
@@ -1082,8 +1044,6 @@ function App() {
     [project, stats.estimatedPages],
   )
   const readThroughQueue = useMemo(() => buildReadThroughQueue(project), [project])
-  const stripboardRows = useMemo(() => buildStripboard(project), [project])
-  const doodGrid = useMemo(() => buildDoodGrid(project), [project])
   const availableShootDays = useMemo(
     () =>
       [...new Set(project.production.schedule.map((entry) => entry.day))]
@@ -1094,120 +1054,7 @@ function App() {
   const resolvedShootDay = availableShootDays.includes(selectedShootDay)
     ? selectedShootDay
     : availableShootDays[0] ?? 1
-  const callSheetPreview = useMemo(
-    () => buildCallSheet(project, resolvedShootDay),
-    [project, resolvedShootDay],
-  )
-  const scriptSidesPreview = useMemo(
-    () => buildScriptSides(project, resolvedShootDay),
-    [project, resolvedShootDay],
-  )
-  const tagCatalogGroups = useMemo(() => buildTagCatalog(project), [project])
-  const autoTagSuggestions = useMemo(() => autoTagScript(project).slice(0, 40), [project])
-  const analyticsDashboard = useMemo(() => buildAnalyticsDashboard(project), [project])
-  const scriptCheckResults = useMemo(() => buildScriptCheck(project), [project])
-  const advancedTiming = useMemo(() => buildTimingReport(project), [project])
-  const advancedNavigatorRows = useMemo(() => buildAdvancedNavigatorRows(project), [project])
   const oneLinerRows = useMemo(() => buildOneLinerSchedule(project), [project])
-  const titlePageWarnings = useMemo(() => buildTitlePageWarnings(project), [project])
-  const revisionSlugList = useMemo(() => buildRevisionSlugList(project), [project])
-  const legalWorkflowLinks = useMemo(() => buildLegalWorkflowLinks(project), [project])
-  const accessibilityExports = useMemo(() => buildAccessibilityExports(project), [project])
-  const seriesReviewFlags = useMemo(() => buildSeriesReviewFlags(project), [project])
-  const printExportSettings = useMemo(() => buildPrintExportSettings(project), [project])
-  const watermarkDescriptor = useMemo(() => buildWatermarkDescriptor(project), [project])
-  const currentReport = useMemo<CurrentReport>(() => {
-    switch (selectedReportView) {
-      case 'character':
-        return {
-          title: 'Character Report',
-          headers: ['Character', 'Scenes', 'Scene Count', 'Pages', 'Screen %'],
-          rows: buildCharacterReport(project).map((row) => [
-            row.character,
-            row.scenes,
-            row.sceneCount,
-            row.totalPages,
-            row.screenTimePercent,
-          ]),
-        }
-      case 'location':
-        return {
-          title: 'Location Report',
-          headers: ['Location', 'INT/EXT', 'Day/Night', 'Scenes', 'Pages'],
-          rows: buildLocationReport(project).map((row) => [
-            row.location,
-            row.intExt,
-            row.dayNight,
-            row.scenes,
-            row.totalPages,
-          ]),
-        }
-      case 'department':
-        return {
-          title: `${selectedReportDepartment} Report`,
-          headers: ['Category', 'Item', 'Scenes', 'Cost', 'Notes'],
-          rows: buildDepartmentReport(project, selectedReportDepartment).map((row) => [
-            row.category,
-            row.item,
-            row.scenes,
-            row.cost,
-            row.notes,
-          ]),
-        }
-      case 'dialogue':
-        return {
-          title: 'Dialogue Report',
-          headers: ['Character', 'Lines', 'Words', '% Total'],
-          rows: buildDialogueReport(project).map((row) => [
-            row.character,
-            row.lines,
-            row.words,
-            row.percent,
-          ]),
-        }
-      case 'summary': {
-        const summary = buildPageSceneSummary(project)
-        return {
-          title: 'Page and Scene Count Summary',
-          headers: ['Metric', 'Value'],
-          rows: [
-            ['Scenes', summary.sceneCount],
-            ['Estimated Pages', summary.estimatedPages],
-            ['Dialogue Lines', summary.dialogueLines],
-            ['Words', summary.wordCount],
-            ['Tagged Items', summary.taggedItems],
-          ],
-        }
-      }
-      case 'analytics':
-        return {
-          title: 'Script Analytics Dashboard',
-          headers: ['Metric', 'Value'],
-          rows: [
-            ['Dialogue Words', analyticsDashboard.dialogueVsAction.dialogueWords],
-            ['Action Words', analyticsDashboard.dialogueVsAction.actionWords],
-            ['Dialogue %', analyticsDashboard.dialogueVsAction.dialoguePercent],
-            ['Action %', analyticsDashboard.dialogueVsAction.actionPercent],
-            ...analyticsDashboard.intExt.map((item) => [`INT/EXT ${item.label}`, item.value]),
-            ...analyticsDashboard.dayNight.map((item) => [`Day/Night ${item.label}`, item.value]),
-          ],
-        }
-      case 'scene':
-      default:
-        return {
-          title: 'Scene Report',
-          headers: ['#', 'Heading', 'INT/EXT', 'Day/Night', 'Cast', 'Pages'],
-          rows: buildSceneReport(project).map((row) => [
-            row.sceneNumber,
-            row.heading,
-            row.intExt,
-            row.dayNight,
-            row.castPresent,
-            row.pageCount,
-          ]),
-        }
-    }
-  }, [analyticsDashboard, project, selectedReportDepartment, selectedReportView])
   const appShellClass = [
     'app-shell',
     'dot-grid',
@@ -1322,11 +1169,6 @@ function App() {
     () => buildShotListRows(project, resolvedSelectedSceneId ?? undefined),
     [project, resolvedSelectedSceneId],
   )
-  const selectedBreakdownSheet = useMemo(
-    () => buildBreakdownSheet(project, resolvedSelectedSceneId),
-    [project, resolvedSelectedSceneId],
-  )
-
   const selectedBlock = useMemo(
     () => project.blocks.find((block) => block.id === selectedBlockId) ?? null,
     [project.blocks, selectedBlockId],
@@ -4045,7 +3887,8 @@ function App() {
     }, 'Removed breakdown entry')
   }
 
-  const exportDayOutOfDays = () => {
+  const exportDayOutOfDays = async () => {
+    const { buildDoodGridCsv } = await import('./lib/productionTools')
     const report = buildDoodGridCsv(project)
     triggerDownload(
       report,
@@ -4056,6 +3899,7 @@ function App() {
   }
 
   const exportCallSheetPdf = async () => {
+    const { buildCallSheet } = await import('./lib/productionTools')
     const sheet = buildCallSheet(project, resolvedShootDay)
     const lines = [
       `Shoot Day ${sheet.day}`,
@@ -4081,6 +3925,7 @@ function App() {
   }
 
   const exportScriptSidesPdf = async () => {
+    const { buildScriptSides } = await import('./lib/productionTools')
     const sides = buildScriptSides(project, resolvedShootDay)
     const lines = sides.scenes.flatMap((scene) => [
       scene.heading,
@@ -4141,7 +3986,7 @@ function App() {
     )
   }
 
-  const confirmAutoTag = (suggestion: (typeof autoTagSuggestions)[number]) => {
+  const confirmAutoTag = (suggestion: AutoTagSuggestion) => {
     applyTaggingProject(
       tagScriptSelection(project, {
         blockId: suggestion.blockId,
@@ -4175,6 +4020,11 @@ function App() {
   }
 
   const exportBreakdownPdf = async () => {
+    const { buildBreakdownSheet } = await import('./lib/taggingBreakdown')
+    const selectedBreakdownSheet = buildBreakdownSheet(
+      project,
+      resolvedSelectedSceneId,
+    )
     const lines = [
       selectedBreakdownSheet.sceneHeading,
       '',
@@ -4203,7 +4053,16 @@ function App() {
     setStatusMessage('Breakdown PDF downloaded')
   }
 
-  const exportCurrentReportCsv = () => {
+  const exportCurrentReportCsv = async () => {
+    const [{ buildReportCsv }, { buildCurrentReport }] = await Promise.all([
+      import('./lib/reportsAnalytics'),
+      import('./workspaces/reportModel'),
+    ])
+    const currentReport = buildCurrentReport(
+      project,
+      selectedReportView,
+      selectedReportDepartment,
+    )
     const report = buildReportCsv(currentReport.headers, currentReport.rows)
     triggerDownload(
       report,
@@ -4216,6 +4075,14 @@ function App() {
   }
 
   const exportCurrentReportPdf = async () => {
+    const { buildCurrentReport, formatReportCell } = await import(
+      './workspaces/reportModel'
+    )
+    const currentReport = buildCurrentReport(
+      project,
+      selectedReportView,
+      selectedReportDepartment,
+    )
     const lines = [
       currentReport.headers.join(' | '),
       ...currentReport.rows.map((row) => row.map(formatReportCell).join(' | ')),
@@ -4343,6 +4210,8 @@ function App() {
   }
 
   const exportScriptCheckPdf = async () => {
+    const { buildScriptCheck } = await import('./lib/advancedMasterScript')
+    const scriptCheckResults = buildScriptCheck(project)
     const lines = scriptCheckResults.map(
       (item) =>
         `${item.severity.toUpperCase()} | ${item.code} | Scene ${item.sceneNumber ?? '-'} | ${item.message} | ${item.suggestion}`,
@@ -6393,879 +6262,99 @@ function App() {
               </section>
             )}
 
+            <Suspense fallback={<WorkspaceFallback />}>
+
             {activeTab === 'production' && (
-              <section className="module-layout module-surface tab-enter">
-                <div className="module-heading">
-                  <h2>Stripboard and Schedule</h2>
-                  <div className="inline-actions">
-                    <select
-                      value={resolvedShootDay}
-                      onChange={(event) => setSelectedShootDay(Number(event.target.value) || 1)}
-                    >
-                      {(availableShootDays.length > 0 ? availableShootDays : [1]).map((day) => (
-                        <option key={day} value={day}>
-                          Day {day}
-                        </option>
-                      ))}
-                    </select>
-                    <button onClick={addScheduleEntry}>Add Schedule Row</button>
-                    <button onClick={regenerateProductionBreakdown}>Generate Breakdown</button>
-                    <button onClick={exportDayOutOfDays}>Export Day-Out-of-Days</button>
-                    <button onClick={() => void exportCallSheetPdf()}>Call Sheet PDF</button>
-                    <button onClick={() => void exportScriptSidesPdf()}>Sides PDF</button>
-                    <button onClick={exportCharacterDialogueReport}>
-                      Export Character Report
-                    </button>
-                    <button onClick={() => addBreakdownEntity('prop')}>Add Prop</button>
-                  </div>
-                </div>
-
-                <div className="production-tools-grid">
-                  <section className="production-tool-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Stripboard</h2>
-                    </div>
-                    <div className="stripboard-list">
-                      {stripboardRows.map((strip) => (
-                        <article
-                          key={strip.id}
-                          className="stripboard-strip"
-                          draggable
-                          onDragStart={() => setDraggingScheduleId(strip.id)}
-                          onDragEnd={() => setDraggingScheduleId(null)}
-                          onDragOver={(event) => event.preventDefault()}
-                          onDrop={() => reorderScheduleEntry(strip.id)}
-                          style={{ borderLeftColor: strip.color }}
-                        >
-                          <strong>
-                            Day {strip.day} | S{strip.sceneNumber ?? '-'} | {strip.heading}
-                          </strong>
-                          <span>{strip.location || 'No location'}</span>
-                          <span>{strip.cast.length > 0 ? strip.cast.join(', ') : 'No cast'}</span>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="production-tool-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Day-Out-of-Days</h2>
-                    </div>
-                    <div
-                      className="dood-grid"
-                      style={{
-                        gridTemplateColumns: `minmax(120px, 1fr) repeat(${Math.max(
-                          doodGrid.days.length,
-                          1,
-                        )}, 54px)`,
-                      }}
-                    >
-                      <strong>Character</strong>
-                      {doodGrid.days.map((day) => (
-                        <strong key={day}>D{day}</strong>
-                      ))}
-                      {doodGrid.rows.map((row) => (
-                        <Fragment key={row.character}>
-                          <span>{row.character}</span>
-                          {row.markers.map((marker, index) => (
-                            <span key={`${row.character}-${doodGrid.days[index]}`}>
-                              {marker}
-                            </span>
-                          ))}
-                        </Fragment>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="production-tool-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Call Sheet Preview</h2>
-                    </div>
-                    <div className="call-sheet-preview">
-                      {callSheetPreview.scenes.map((scene) => (
-                        <span key={`${scene.sceneId ?? 'none'}-${scene.heading}`}>
-                          S{scene.sceneNumber ?? '-'} | {scene.heading}
-                        </span>
-                      ))}
-                      <strong>Cast</strong>
-                      <span>{callSheetPreview.cast.join(', ') || 'None'}</span>
-                      <strong>Crew</strong>
-                      <span>
-                        {callSheetPreview.crew.map((crew) => crew.name).join(', ') || 'None'}
-                      </span>
-                    </div>
-                  </section>
-
-                  <section className="production-tool-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Sides Preview</h2>
-                    </div>
-                    <div className="call-sheet-preview">
-                      {scriptSidesPreview.scenes.map((scene) => (
-                        <span key={scene.sceneId}>
-                          {scene.heading} | {scene.blocks.length} blocks
-                          {scene.hasRevisionMarks ? ' | revisions' : ''}
-                        </span>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-
-                <div className="table-layout">
-                  <div className="table-header">Day</div>
-                  <div className="table-header">Scene</div>
-                  <div className="table-header">Location</div>
-                  <div className="table-header">Notes</div>
-                  <div className="table-header">Actions</div>
-
-                  {project.production.schedule.map((entry) => (
-                    <Fragment key={entry.id}>
-                      <input
-                        ref={(node) => {
-                          itemRefs.current[entry.id] = node
-                        }}
-                        className={highlightedId === entry.id ? 'highlighted' : ''}
-                        type="number"
-                        min={1}
-                        value={entry.day}
-                        onChange={(event) =>
-                          updateScheduleEntry(entry.id, (target) => {
-                            target.day = Number(event.target.value) || 1
-                          })
-                        }
-                      />
-                      <select
-                        value={entry.sceneId ?? ''}
-                        onChange={(event) =>
-                          updateScheduleEntry(entry.id, (target) => {
-                            target.sceneId = event.target.value || null
-                            if (event.target.value) {
-                              setSelectedSceneId(event.target.value)
-                            }
-                          })
-                        }
-                      >
-                        <option value="">Unassigned</option>
-                        {scenes.map((scene, index) => (
-                          <option key={scene.blockId} value={scene.blockId}>
-                            S{index + 1} - {scene.heading}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        value={entry.location}
-                        onChange={(event) =>
-                          updateScheduleEntry(entry.id, (target) => {
-                            target.location = event.target.value
-                          })
-                        }
-                        placeholder="Location"
-                      />
-                      <input
-                        value={entry.notes}
-                        onChange={(event) =>
-                          updateScheduleEntry(entry.id, (target) => {
-                            target.notes = event.target.value
-                          })
-                        }
-                        placeholder="Shooting notes"
-                      />
-                      <button onClick={() => removeScheduleEntry(entry.id)}>Remove</button>
-                    </Fragment>
-                  ))}
-                </div>
-
-                <div className="module-heading subheading">
-                  <h2>Breakdown Entities</h2>
-                  <p className="small-copy">
-                    {project.production.breakdown.length} tracked items
-                  </p>
-                </div>
-
-                <div className="table-layout breakdown-table">
-                  <div className="table-header">Kind</div>
-                  <div className="table-header">Name</div>
-                  <div className="table-header">Scenes</div>
-                  <div className="table-header">Notes</div>
-                  <div className="table-header">Actions</div>
-
-                  {project.production.breakdown.map((entry) => (
-                    <Fragment key={entry.id}>
-                      <select
-                        value={entry.kind}
-                        onChange={(event) =>
-                          updateBreakdownEntry(entry.id, (target) => {
-                            target.kind = event.target.value as BreakdownKind
-                          })
-                        }
-                      >
-                        <option value="cast">Cast</option>
-                        <option value="location">Location</option>
-                        <option value="prop">Prop</option>
-                        <option value="vehicle">Vehicle</option>
-                        <option value="equipment">Equipment</option>
-                        <option value="crew">Crew</option>
-                      </select>
-                      <input
-                        value={entry.name}
-                        onChange={(event) =>
-                          updateBreakdownEntry(entry.id, (target) => {
-                            target.name = event.target.value
-                          })
-                        }
-                        placeholder="Entity name"
-                      />
-                      <p className="scene-pill-list">
-                        {entry.sceneIds.length === 0
-                          ? 'No linked scenes'
-                          : entry.sceneIds
-                              .map((sceneId) => sceneById.get(sceneId) ?? sceneId)
-                              .join(' | ')}
-                      </p>
-                      <input
-                        value={entry.notes}
-                        onChange={(event) =>
-                          updateBreakdownEntry(entry.id, (target) => {
-                            target.notes = event.target.value
-                          })
-                        }
-                        placeholder="Notes"
-                      />
-                      <button onClick={() => removeBreakdownEntry(entry.id)}>Remove</button>
-                    </Fragment>
-                  ))}
-                </div>
-              </section>
+              <ProductionWorkspace
+                project={project}
+                scenes={scenes}
+                selectedShootDay={selectedShootDay}
+                setSelectedShootDay={setSelectedShootDay}
+                highlightedId={highlightedId}
+                itemRefs={itemRefs}
+                addScheduleEntry={addScheduleEntry}
+                regenerateProductionBreakdown={regenerateProductionBreakdown}
+                exportDayOutOfDays={exportDayOutOfDays}
+                exportCallSheetPdf={exportCallSheetPdf}
+                exportScriptSidesPdf={exportScriptSidesPdf}
+                exportCharacterDialogueReport={exportCharacterDialogueReport}
+                addBreakdownEntity={addBreakdownEntity}
+                setDraggingScheduleId={setDraggingScheduleId}
+                reorderScheduleEntry={reorderScheduleEntry}
+                updateScheduleEntry={updateScheduleEntry}
+                removeScheduleEntry={removeScheduleEntry}
+                setSelectedSceneId={setSelectedSceneId}
+                updateBreakdownEntry={updateBreakdownEntry}
+                removeBreakdownEntry={removeBreakdownEntry}
+              />
             )}
+
 
             {activeTab === 'breakdown' && (
-              <section className="module-layout module-surface tab-enter">
-                <div className="module-heading">
-                  <h2>Tagging and Breakdown</h2>
-                  <div className="inline-actions">
-                    <button onClick={applyManualTag}>Apply Tag</button>
-                    <button onClick={exportBreakdownCsv}>Breakdown CSV</button>
-                    <button onClick={() => void exportBreakdownPdf()}>Breakdown PDF</button>
-                  </div>
-                </div>
-
-                <div className="tagging-grid">
-                  <section className="tagging-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Inline Tagging</h2>
-                    </div>
-                    <label>
-                      <span>Category</span>
-                      <select
-                        value={selectedTagCategory}
-                        onChange={(event) =>
-                          setSelectedTagCategory(event.target.value as DepartmentTagCategory)
-                        }
-                      >
-                        {departmentTagCategories.map((category) => (
-                          <option key={category}>{category}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span>Selected Phrase</span>
-                      <input
-                        value={tagPhrase}
-                        onChange={(event) => setTagPhrase(event.target.value)}
-                        placeholder="Highlight in Draft or type phrase"
-                      />
-                    </label>
-                    <div className="tag-swatch-row">
-                      {departmentTagCategories.map((category) => (
-                        <button
-                          key={category}
-                          className={category === selectedTagCategory ? 'active' : ''}
-                          onClick={() => setSelectedTagCategory(category)}
-                          style={{ borderColor: departmentTagColors[category] }}
-                        >
-                          <span style={{ background: departmentTagColors[category] }} />
-                          {category}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="tagging-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Auto-Tag Suggestions</h2>
-                    </div>
-                    <div className="tag-suggestion-list">
-                      {autoTagSuggestions.length === 0 && (
-                        <p className="small-copy">No local suggestions found.</p>
-                      )}
-                      {autoTagSuggestions.map((suggestion) => (
-                        <button
-                          key={`${suggestion.blockId}-${suggestion.category}-${suggestion.start}`}
-                          onClick={() => confirmAutoTag(suggestion)}
-                          style={{ borderLeftColor: suggestion.color }}
-                        >
-                          <strong>{suggestion.category}</strong>
-                          <span>{suggestion.text}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="tagging-panel breakdown-sheet-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Scene Breakdown</h2>
-                    </div>
-                    <strong>{selectedBreakdownSheet.sceneHeading}</strong>
-                    <div className="breakdown-category-list">
-                      {departmentTagCategories.map((category) => {
-                        const items = selectedBreakdownSheet.categories[category] ?? []
-                        if (items.length === 0) {
-                          return null
-                        }
-
-                        return (
-                          <article key={category}>
-                            <h3>{category}</h3>
-                            {items.map((item) => (
-                              <span key={item.id}>
-                                {item.name} | {item.occurrences.length} occurrence(s)
-                              </span>
-                            ))}
-                          </article>
-                        )
-                      })}
-                    </div>
-                  </section>
-                </div>
-
-                <div className="tag-catalog-grid">
-                  {departmentTagCategories.map((category) => {
-                    const items = tagCatalogGroups[category] ?? []
-                    if (items.length === 0) {
-                      return null
-                    }
-
-                    return (
-                      <section className="tagging-panel" key={category}>
-                        <div className="module-heading compact-heading">
-                          <h2>{category}</h2>
-                        </div>
-                        {items.map((item) => (
-                          <article className="tag-catalog-item" key={item.id}>
-                            <input
-                              value={item.name}
-                              onChange={(event) =>
-                                updateTagCatalog(item.id, { name: event.target.value })
-                              }
-                            />
-                            <input
-                              type="number"
-                              min={0}
-                              value={item.cost}
-                              onChange={(event) =>
-                                updateTagCatalog(item.id, {
-                                  cost: Number(event.target.value) || 0,
-                                })
-                              }
-                              placeholder="Cost"
-                            />
-                            <input
-                              value={item.notes}
-                              onChange={(event) =>
-                                updateTagCatalog(item.id, { notes: event.target.value })
-                              }
-                              placeholder="Notes"
-                            />
-                            <input
-                              value={item.imageDataUrl}
-                              onChange={(event) =>
-                                updateTagCatalog(item.id, {
-                                  imageDataUrl: event.target.value,
-                                })
-                              }
-                              placeholder="Image data URL or reference"
-                            />
-                          </article>
-                        ))}
-                      </section>
-                    )
-                  })}
-                </div>
-              </section>
+              <BreakdownWorkspace
+                project={project}
+                selectedSceneId={resolvedSelectedSceneId}
+                selectedTagCategory={selectedTagCategory}
+                tagPhrase={tagPhrase}
+                setSelectedTagCategory={setSelectedTagCategory}
+                setTagPhrase={setTagPhrase}
+                applyManualTag={applyManualTag}
+                confirmAutoTag={confirmAutoTag}
+                updateTagCatalog={updateTagCatalog}
+                exportBreakdownCsv={exportBreakdownCsv}
+                exportBreakdownPdf={exportBreakdownPdf}
+              />
             )}
+
 
             {activeTab === 'reports' && (
-              <section className="module-layout module-surface tab-enter">
-                <div className="module-heading">
-                  <h2>Reports and Analytics</h2>
-                  <div className="inline-actions">
-                    <select
-                      value={selectedReportView}
-                      onChange={(event) =>
-                        setSelectedReportView(event.target.value as ReportView)
-                      }
-                    >
-                      <option value="scene">Scene Report</option>
-                      <option value="character">Character Report</option>
-                      <option value="location">Location Report</option>
-                      <option value="department">Department Report</option>
-                      <option value="dialogue">Dialogue Report</option>
-                      <option value="summary">Page/Scene Summary</option>
-                      <option value="analytics">Analytics Dashboard</option>
-                    </select>
-                    {selectedReportView === 'department' && (
-                      <select
-                        value={selectedReportDepartment}
-                        onChange={(event) =>
-                          setSelectedReportDepartment(
-                            event.target.value as DepartmentTagCategory,
-                          )
-                        }
-                      >
-                        {departmentTagCategories.map((category) => (
-                          <option key={category}>{category}</option>
-                        ))}
-                      </select>
-                    )}
-                    <button onClick={exportCurrentReportCsv}>Export CSV</button>
-                    <button onClick={() => void exportCurrentReportPdf()}>Export PDF</button>
-                  </div>
-                </div>
-
-                {selectedReportView === 'analytics' && (
-                  <div className="analytics-grid">
-                    <section className="analytics-panel">
-                      <div className="module-heading compact-heading">
-                        <h2>INT vs EXT</h2>
-                      </div>
-                      {analyticsDashboard.intExt.map((item) => (
-                        <div className="chart-bar-row" key={item.label}>
-                          <span>{item.label}</span>
-                          <div>
-                            <i style={{ width: `${Math.max(8, item.value * 22)}%` }} />
-                          </div>
-                          <strong>{item.value}</strong>
-                        </div>
-                      ))}
-                    </section>
-
-                    <section className="analytics-panel">
-                      <div className="module-heading compact-heading">
-                        <h2>Day vs Night</h2>
-                      </div>
-                      {analyticsDashboard.dayNight.map((item) => (
-                        <div className="chart-bar-row" key={item.label}>
-                          <span>{item.label}</span>
-                          <div>
-                            <i style={{ width: `${Math.max(8, item.value * 22)}%` }} />
-                          </div>
-                          <strong>{item.value}</strong>
-                        </div>
-                      ))}
-                    </section>
-
-                    <section className="analytics-panel">
-                      <div className="module-heading compact-heading">
-                        <h2>Dialogue vs Action</h2>
-                      </div>
-                      <div className="ratio-chart">
-                        <span
-                          style={{
-                            width: `${analyticsDashboard.dialogueVsAction.dialoguePercent}%`,
-                          }}
-                        />
-                        <b
-                          style={{
-                            width: `${analyticsDashboard.dialogueVsAction.actionPercent}%`,
-                          }}
-                        />
-                      </div>
-                      <p className="small-copy">
-                        Dialogue {analyticsDashboard.dialogueVsAction.dialogueWords} words | Action{' '}
-                        {analyticsDashboard.dialogueVsAction.actionWords} words
-                      </p>
-                    </section>
-
-                    <section className="analytics-panel">
-                      <div className="module-heading compact-heading">
-                        <h2>Scene Length</h2>
-                      </div>
-                      {analyticsDashboard.sceneLengthHistogram.map((item) => (
-                        <div className="chart-bar-row" key={item.sceneNumber}>
-                          <span>S{item.sceneNumber}</span>
-                          <div>
-                            <i style={{ width: `${Math.max(8, item.words * 2)}%` }} />
-                          </div>
-                          <strong>{item.words}</strong>
-                        </div>
-                      ))}
-                    </section>
-                  </div>
-                )}
-
-                <div className="report-table-wrap">
-                  <h3>{currentReport.title}</h3>
-                  <div
-                    className="report-table"
-                    style={{
-                      gridTemplateColumns: `repeat(${Math.max(
-                        currentReport.headers.length,
-                        1,
-                      )}, minmax(120px, 1fr))`,
-                    }}
-                  >
-                    {currentReport.headers.map((header) => (
-                      <strong key={header}>{header}</strong>
-                    ))}
-                    {currentReport.rows.map((row, rowIndex) => (
-                      <Fragment key={`${currentReport.title}-${rowIndex}`}>
-                        {row.map((cell, cellIndex) => (
-                          <span key={`${currentReport.title}-${rowIndex}-${cellIndex}`}>
-                            {formatReportCell(cell)}
-                          </span>
-                        ))}
-                      </Fragment>
-                    ))}
-                  </div>
-                </div>
-              </section>
+              <ReportsWorkspace
+                project={project}
+                selectedReportView={selectedReportView}
+                selectedReportDepartment={selectedReportDepartment}
+                setSelectedReportView={setSelectedReportView}
+                setSelectedReportDepartment={setSelectedReportDepartment}
+                exportCurrentReportCsv={exportCurrentReportCsv}
+                exportCurrentReportPdf={exportCurrentReportPdf}
+              />
             )}
+
 
             {activeTab === 'advanced' && (
-              <section className="module-layout module-surface tab-enter">
-                <div className="module-heading">
-                  <h2>Advanced Production Suite</h2>
-                  <div className="inline-actions">
-                    <button onClick={beginProductionDraftAction}>Begin Production Draft</button>
-                    <button onClick={() => void exportCleanPdf()}>Clean PDF</button>
-                    <button onClick={() => void exportDirtyPdf()}>Dirty PDF</button>
-                    <button onClick={() => void exportTableReadPdf()}>Table Read Draft</button>
-                  </div>
-                </div>
-
-                <div className="advanced-grid">
-                  <section className="advanced-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Formats and SmartType</h2>
-                    </div>
-                    <label>
-                      <span>Script Format</span>
-                      <select
-                        value={project.advanced.activeFormat}
-                        onChange={(event) => setAdvancedFormat(event.target.value as ScriptFormatId)}
-                      >
-                        {scriptFormatPresets.map((format) => (
-                          <option key={format.id} value={format.id}>
-                            {format.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <button onClick={insertFormatTemplate}>Insert Format Template</button>
-                    <div className="token-list">
-                      {[...smartTypeTimesOfDay, ...smartTypeTransitions, ...smartTypeExtensions]
-                        .slice(0, 28)
-                        .map((token) => (
-                          <span key={token}>{token}</span>
-                        ))}
-                    </div>
-                    <div className="token-list">
-                      {technicalElementTemplates.map((element) => (
-                        <span key={`${element.type}-${element.label}`}>{element.label}</span>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="advanced-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Title, Security, Legal</h2>
-                    </div>
-                    <input
-                      value={project.advanced.titlePage.writtenBy}
-                      onChange={(event) => updateAdvancedTitleField('writtenBy', event.target.value)}
-                      placeholder="Written By"
-                    />
-                    <input
-                      value={project.advanced.titlePage.screenplayBy}
-                      onChange={(event) => updateAdvancedTitleField('screenplayBy', event.target.value)}
-                      placeholder="Screenplay By"
-                    />
-                    <input
-                      value={project.advanced.titlePage.storyBy}
-                      onChange={(event) => updateAdvancedTitleField('storyBy', event.target.value)}
-                      placeholder="Story By"
-                    />
-                    <input
-                      value={project.advanced.titlePage.basedOn}
-                      onChange={(event) => updateAdvancedTitleField('basedOn', event.target.value)}
-                      placeholder="Based On"
-                    />
-                    <input
-                      value={project.advanced.titlePage.wgaRegistrationNumber}
-                      onChange={(event) =>
-                        updateAdvancedTitleField('wgaRegistrationNumber', event.target.value)
-                      }
-                      placeholder="WGA Registration #"
-                    />
-                    <input
-                      value={project.advanced.titlePage.copyrightNotice}
-                      onChange={(event) =>
-                        updateAdvancedTitleField('copyrightNotice', event.target.value)
-                      }
-                      placeholder={currentYearCopyright()}
-                    />
-                    <input
-                      value={project.advanced.titlePage.coverImageDataUrl}
-                      onChange={(event) =>
-                        updateAdvancedTitleField('coverImageDataUrl', event.target.value)
-                      }
-                      placeholder="Cover image data URL"
-                    />
-                    {titlePageWarnings.map((warning) => (
-                      <p className="small-copy" key={warning.code} title={warning.tooltip}>
-                        {warning.message}
-                      </p>
-                    ))}
-                    <label className="toggle-row compact">
-                      <input
-                        type="checkbox"
-                        checked={project.advanced.submissionLocked}
-                        onChange={(event) =>
-                          applyAdvancedProject(
-                            updateAdvancedSettings(project, {
-                              submissionLocked: event.target.checked,
-                            }),
-                            'Updated submission lock',
-                          )
-                        }
-                      />
-                      <span>Lock for submission</span>
-                    </label>
-                    <div className="inline-actions">
-                      <button
-                        title={legalWorkflowLinks.poorMansCopyrightTooltip}
-                        onClick={() => window.open(legalWorkflowLinks.wgaUrl, '_blank')}
-                      >
-                        Register with WGA
-                      </button>
-                      <button
-                        title={legalWorkflowLinks.poorMansCopyrightTooltip}
-                        onClick={() => window.open(legalWorkflowLinks.copyrightUrl, '_blank')}
-                      >
-                        Register Copyright
-                      </button>
-                    </div>
-                  </section>
-
-                  <section className="advanced-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Revision and Page Control</h2>
-                    </div>
-                    <div className="inline-actions">
-                      <button onClick={logRevisionDistributionNow}>Log Distribution</button>
-                      <button onClick={exportRevisionLogCsv}>Revision CSV</button>
-                      <button onClick={() => void exportRevisionLogPdf()}>Revision PDF</button>
-                    </div>
-                    <div className="session-list">
-                      {project.advanced.revisionDistributionLog.map((event) => (
-                        <span key={event.id}>
-                          {event.date} | {event.color} | {event.pages.join(', ')} | {event.recipients}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="token-list">
-                      {revisionSlugList.map((slug) => (
-                        <span key={slug}>{slug}</span>
-                      ))}
-                    </div>
-                    <p className="small-copy">
-                      Scene numbers: {project.advanced.sceneNumbering.locked ? 'Locked' : 'Unlocked'} | Fixed page mode:{' '}
-                      {project.advanced.fixedPageMode ? 'On' : 'Off'}
-                    </p>
-                  </section>
-
-                  <section className="advanced-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Script Check</h2>
-                      <button onClick={() => void exportScriptCheckPdf()}>Notes PDF</button>
-                    </div>
-                    <div className="script-check-list">
-                      {scriptCheckResults.slice(0, 12).map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => {
-                            if (item.blockId) {
-                              setSelectedBlockId(item.blockId)
-                              queueFocus(item.blockId)
-                            }
-                          }}
-                          title={item.tooltip}
-                        >
-                          <strong>{item.code}</strong>
-                          <span>Scene {item.sceneNumber ?? '-'} | {item.message}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="advanced-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Cast, Sides, Schedule</h2>
-                    </div>
-                    <div className="custom-field-row">
-                      <select
-                        value={selectedCastStatusCharacter || characterSuggestions[0] || ''}
-                        onChange={(event) => setSelectedCastStatusCharacter(event.target.value)}
-                      >
-                        {characterSuggestions.map((name) => (
-                          <option key={name} value={name}>
-                            {name}
-                          </option>
-                        ))}
-                      </select>
-                      <select
-                        value={selectedCastStatus}
-                        onChange={(event) => setSelectedCastStatus(event.target.value as CastStatus)}
-                      >
-                        <option>Series Regular</option>
-                        <option>Recurring</option>
-                        <option>Guest Star</option>
-                        <option>Co-Star</option>
-                        <option>Day Player</option>
-                        <option>Under-5</option>
-                      </select>
-                    </div>
-                    <button onClick={setCastStatusForCharacter}>Set Cast Status</button>
-                    <div className="inline-actions">
-                      <button onClick={exportOneLinerCsv}>One-Liner CSV</button>
-                      <button onClick={() => void exportOneLinerPdf()}>One-Liner PDF</button>
-                      <button
-                        onClick={() =>
-                          setStatusMessage(
-                            createDigitalSidesLink(project.id, {
-                              expiresAt: new Date(Date.now() + 7 * 86_400_000)
-                                .toISOString()
-                                .slice(0, 10),
-                            }),
-                          )
-                        }
-                      >
-                        Digital Sides Link
-                      </button>
-                    </div>
-                    <div className="session-list">
-                      {buildAdvancedSidesPackage(project, resolvedShootDay).coverCards.map((card) => (
-                        <span key={card.sceneId}>
-                          {card.sceneHeading} | {card.pageCount} pg | {card.cast.join(', ')}
-                        </span>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="advanced-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Timing and Navigator</h2>
-                    </div>
-                    <p className="timer-display">{advancedTiming.totalMinutes} min</p>
-                    <div className="navigator-enhancement-list">
-                      {advancedNavigatorRows.slice(0, 8).map((row) => (
-                        <article key={row.sceneId} title={`${row.wordCount} words | ${row.lineCount} lines`}>
-                          <strong>{row.sceneNumber} {row.intExt} {row.dayNight}</strong>
-                          <span>{row.heading}</span>
-                          <i style={{ width: `${row.lengthBarPercent}%`, background: row.color }} />
-                          <small>{row.castInitials.join(' ')}</small>
-                        </article>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="advanced-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Coverage and Writer's Room</h2>
-                    </div>
-                    <div className="inline-actions">
-                      <button onClick={addDefaultCoverage}>Add Coverage</button>
-                      <button onClick={() => void exportLatestCoveragePdf()}>Coverage PDF</button>
-                      <button onClick={addParkingLotFromSelection}>Park Scene</button>
-                    </div>
-                    <p className="small-copy">
-                      Coverage forms: {project.advanced.coverage.length} | Parking lot:{' '}
-                      {project.advanced.writerRoom.parkingLot.length}
-                    </p>
-                    <textarea
-                      rows={4}
-                      value={project.advanced.series.bible}
-                      onChange={(event) =>
-                        applyAdvancedProject(
-                          updateAdvancedSettings(project, {
-                            series: { ...project.advanced.series, bible: event.target.value },
-                          }),
-                          'Updated series bible',
-                        )
-                      }
-                      placeholder="Series bible"
-                    />
-                    {seriesReviewFlags.map((flag) => (
-                      <span className="small-copy" key={flag}>{flag}</span>
-                    ))}
-                  </section>
-
-                  <section className="advanced-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Print, Watermark, Accessibility</h2>
-                    </div>
-                    <label className="toggle-row compact">
-                      <input
-                        type="checkbox"
-                        checked={printExportSettings.draftInkSaver}
-                        onChange={(event) => updatePrintWatermarkField('draftInkSaver', event.target.checked)}
-                      />
-                      <span>Draft ink saver</span>
-                    </label>
-                    <label className="toggle-row compact">
-                      <input
-                        type="checkbox"
-                        checked={printExportSettings.twoUp}
-                        onChange={(event) => updatePrintWatermarkField('twoUp', event.target.checked)}
-                      />
-                      <span>Two-up printing</span>
-                    </label>
-                    <input
-                      value={printExportSettings.watermarkText}
-                      onChange={(event) => updatePrintWatermarkField('watermarkText', event.target.value)}
-                      placeholder="Per-page watermark"
-                    />
-                    <input
-                      value={printExportSettings.recipientWatermark}
-                      onChange={(event) => updatePrintWatermarkField('recipientWatermark', event.target.value)}
-                      placeholder="Recipient watermark"
-                    />
-                    <p className="small-copy">
-                      Watermark: {watermarkDescriptor.text || 'None'} | {watermarkDescriptor.position} |{' '}
-                      {watermarkDescriptor.opacity}
-                    </p>
-                    <div className="token-list">
-                      {accessibilityExports.formats.map((format) => (
-                        <span key={format}>{format}</span>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="advanced-panel">
-                    <div className="module-heading compact-heading">
-                      <h2>Additional Exports</h2>
-                    </div>
-                    <div className="inline-actions">
-                      <button onClick={() => exportAdditionalFormat('txt')}>TXT</button>
-                      <button onClick={() => exportAdditionalFormat('rtf')}>RTF</button>
-                      <button onClick={() => exportAdditionalFormat('html')}>HTML</button>
-                      <button onClick={() => exportAdditionalFormat('scene-csv')}>Scene CSV</button>
-                      <button onClick={() => exportAdditionalFormat('workbook')}>Excel XML</button>
-                    </div>
-                  </section>
-                </div>
-              </section>
+              <AdvancedWorkspace
+                project={project}
+                resolvedShootDay={resolvedShootDay}
+                characterSuggestions={characterSuggestions}
+                selectedCastStatusCharacter={selectedCastStatusCharacter}
+                selectedCastStatus={selectedCastStatus}
+                setSelectedCastStatusCharacter={setSelectedCastStatusCharacter}
+                setSelectedCastStatus={setSelectedCastStatus}
+                setAdvancedFormat={setAdvancedFormat}
+                insertFormatTemplate={insertFormatTemplate}
+                updateAdvancedTitleField={updateAdvancedTitleField}
+                applyAdvancedProject={applyAdvancedProject}
+                beginProductionDraftAction={beginProductionDraftAction}
+                exportCleanPdf={exportCleanPdf}
+                exportDirtyPdf={exportDirtyPdf}
+                exportTableReadPdf={exportTableReadPdf}
+                logRevisionDistributionNow={logRevisionDistributionNow}
+                exportRevisionLogCsv={exportRevisionLogCsv}
+                exportRevisionLogPdf={exportRevisionLogPdf}
+                exportScriptCheckPdf={exportScriptCheckPdf}
+                setSelectedBlockId={setSelectedBlockId}
+                queueFocus={queueFocus}
+                setCastStatusForCharacter={setCastStatusForCharacter}
+                exportOneLinerCsv={exportOneLinerCsv}
+                exportOneLinerPdf={exportOneLinerPdf}
+                setStatusMessage={setStatusMessage}
+                addDefaultCoverage={addDefaultCoverage}
+                exportLatestCoveragePdf={exportLatestCoveragePdf}
+                addParkingLotFromSelection={addParkingLotFromSelection}
+                updatePrintWatermarkField={updatePrintWatermarkField}
+                exportAdditionalFormat={exportAdditionalFormat}
+              />
             )}
+            </Suspense>
 
             {activeTab === 'budget' && (
               <section className="module-layout module-surface tab-enter">

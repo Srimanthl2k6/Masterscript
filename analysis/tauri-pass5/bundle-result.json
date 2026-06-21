@@ -1,0 +1,14 @@
+{
+  "recordedAt": "2026-06-21T17:33:18.000Z",
+  "baselineMainChunkBytes": 574138,
+  "pass5MainChunkBytes": 524108,
+  "mainChunkReductionBytes": 50030,
+  "mainChunkReductionPercent": 8.71,
+  "lazyWorkspaceChunks": {
+    "AdvancedWorkspace": 10319,
+    "BreakdownWorkspace": 3610,
+    "ProductionWorkspace": 6811,
+    "ReportsWorkspace": 3892
+  },
+  "lazyWorkspaceBytes": 24632
+}
