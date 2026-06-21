@@ -6,7 +6,7 @@ MasterScript is a Windows-first desktop screenwriting suite inspired by the capa
 
 This initial implementation includes:
 
-- Electron desktop shell with secure preload bridge
+- Tauri 2 desktop shell with Rust persistence and collaboration commands
 - React + TypeScript app with screenplay-first editor
 - Screenplay blocks and keyboard workflow
   - `Tab` cycles block element type
@@ -38,10 +38,7 @@ npm install
 npm run dev
 ```
 
-This starts:
-
-- Vite dev server for renderer
-- Electron desktop process for Windows app runtime
+This starts the Vite renderer inside the Tauri 2 desktop shell.
 
 ## Scripts
 
@@ -55,9 +52,11 @@ This starts:
 ## Project Structure
 
 ```text
-/electron
-  main.cjs
-  preload.cjs
+/src-tauri
+  /src
+    commands.rs
+    persistence.rs
+    migration.rs
 /src
   App.tsx
   /components
@@ -71,7 +70,7 @@ This starts:
     screenplay.test.ts
   /types
     screenplay.ts
-    electron.d.ts
+    desktop.d.ts
 ```
 
 ## Roadmap Alignment

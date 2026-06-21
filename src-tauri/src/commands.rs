@@ -5,7 +5,9 @@ use crate::models::{
     AutosaveReadResult, BinaryImportResult, LanHostOptions, LanHostResult, LanJoinOptions,
     LanJoinResult, OpenProjectResult, OperationResult, TextImportResult,
 };
-use crate::persistence::{read_json_value, write_bytes_atomic, write_json_atomic};
+use crate::persistence::{
+    read_json_value, write_bytes_atomic, write_compact_json_atomic, write_json_atomic,
+};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use serde_json::Value;
@@ -14,6 +16,8 @@ use std::path::{Path, PathBuf};
 use tauri::{Manager, State};
 
 const AUTOSAVE_FILE: &str = "autosave.msproj.json";
+const RECENT_PROJECT_SNAPSHOTS_FILE: &str = "recent-project-snapshots-v1.json";
+const RECENT_PROJECT_SNAPSHOT_LIMIT: usize = 12;
 
 fn normalize_file_name(value: &str) -> String {
     let normalized = value
@@ -52,6 +56,13 @@ fn autosave_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
         .map(|path| path.join(AUTOSAVE_FILE))
+        .map_err(|error| error.to_string())
+}
+
+fn recent_project_snapshots_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map(|path| path.join(RECENT_PROJECT_SNAPSHOTS_FILE))
         .map_err(|error| error.to_string())
 }
 
@@ -149,7 +160,10 @@ async fn export_binary(
 #[tauri::command]
 pub fn project_autosave(app: tauri::AppHandle, project: Value) -> OperationResult {
     match autosave_path(&app) {
-        Ok(path) => save_json(&path, &project),
+        Ok(path) => match write_compact_json_atomic(&path, &project) {
+            Ok(()) => OperationResult::success(Some(path.to_string_lossy().into_owned())),
+            Err(error) => OperationResult::failure(error.to_string()),
+        },
         Err(error) => OperationResult::failure(error),
     }
 }
@@ -182,6 +196,55 @@ pub fn project_read_autosave(app: tauri::AppHandle) -> AutosaveReadResult {
             project: None,
             error: Some(error.to_string()),
         },
+    }
+}
+
+#[tauri::command]
+pub fn project_read_recent_snapshots(app: tauri::AppHandle) -> Result<Value, String> {
+    let path = recent_project_snapshots_path(&app)?;
+    match read_json_value(&path) {
+        Ok(Value::Object(snapshots)) => Ok(Value::Object(snapshots)),
+        Ok(_) => Ok(Value::Object(Default::default())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(Value::Object(Default::default()))
+        }
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn project_write_recent_snapshot(app: tauri::AppHandle, project: Value) -> OperationResult {
+    let Some(project_id) = project.get("id").and_then(Value::as_str) else {
+        return OperationResult::failure("Recent project snapshot is missing an id");
+    };
+    let path = match recent_project_snapshots_path(&app) {
+        Ok(path) => path,
+        Err(error) => return OperationResult::failure(error),
+    };
+    let mut snapshots = match read_json_value(&path) {
+        Ok(Value::Object(value)) => value,
+        _ => Default::default(),
+    };
+    snapshots.insert(project_id.to_owned(), project);
+
+    let mut entries = snapshots.into_iter().collect::<Vec<_>>();
+    entries.sort_by(|(_, left), (_, right)| {
+        let left_updated = left
+            .pointer("/meta/updatedAt")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let right_updated = right
+            .pointer("/meta/updatedAt")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        right_updated.cmp(left_updated)
+    });
+    entries.truncate(RECENT_PROJECT_SNAPSHOT_LIMIT);
+    let snapshots = serde_json::Map::from_iter(entries);
+
+    match write_compact_json_atomic(&path, &Value::Object(snapshots)) {
+        Ok(()) => OperationResult::success(Some(path.to_string_lossy().into_owned())),
+        Err(error) => OperationResult::failure(error.to_string()),
     }
 }
 

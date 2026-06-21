@@ -32,12 +32,12 @@ import {
   hostedLanRoomsKey,
   legacyMigrationStateChangedEvent,
   notifyLegacyMigrationStateChanged,
-  recentProjectSnapshotsKey,
   recentProjectsKey,
   themeKey,
 } from './lib/desktop/storageKeys'
-import type { RecentProjectEntry } from './lib/desktop/types'
+import type { InstallState, RecentProjectEntry } from './lib/desktop/types'
 import { legacySourceVersion } from './lib/desktop/version'
+import { useTauriCloseFlush } from './lib/desktop/useTauriCloseFlush'
 import { paginateProjectForPrint } from './lib/adapters/pagination'
 import type { AdapterWarning } from './lib/adapters/types'
 import { paginateBlocksForEditor } from './lib/editorPagination'
@@ -97,6 +97,19 @@ import {
   upsertCharacterProfile,
 } from './lib/characterTools'
 import { handleFindInputKeyDown } from './lib/findReplace'
+import {
+  shouldOpenTutorialAutomatically,
+  tutorialSteps,
+} from './lib/tutorial'
+import {
+  commitProjectHistory,
+  commitProjectReplacement,
+  createProjectHistory,
+  redoProjectHistory,
+  replaceProjectHistory,
+  undoProjectHistory,
+  type ProjectHistoryState,
+} from './lib/projectHistory'
 import {
   assignCharacterVoices,
   buildReadThroughQueue,
@@ -190,12 +203,7 @@ const ProductionWorkspace = lazy(() => import('./workspaces/ProductionWorkspace'
 const BreakdownWorkspace = lazy(() => import('./workspaces/BreakdownWorkspace'))
 const ReportsWorkspace = lazy(() => import('./workspaces/ReportsWorkspace'))
 const AdvancedWorkspace = lazy(() => import('./workspaces/AdvancedWorkspace'))
-
-interface HistoryState {
-  past: ScriptProject[]
-  present: ScriptProject
-  future: ScriptProject[]
-}
+const GuidedTutorial = lazy(() => import('./components/GuidedTutorial'))
 
 interface SearchHit {
   id: string
@@ -235,7 +243,6 @@ interface QueuedSelection {
   end: number
 }
 
-const historyLimit = 80
 const defaultPreviewZoom = 0.82
 const useContinuousDraftEditor = false
 const characterVoiceCueOptions: Array<{ label: string; cue: CharacterVoiceCue }> = [
@@ -429,42 +436,12 @@ const buildProjectCollaborationInvite = (project: ScriptProject): string => {
   })
 }
 
-const readRecentProjectSnapshots = (): Record<string, ScriptProject> => {
-  try {
-    const raw = localStorage.getItem(recentProjectSnapshotsKey)
-    if (!raw) {
-      return {}
-    }
-
-    const parsed = JSON.parse(raw) as unknown
-    if (!isRecord(parsed)) {
-      return {}
-    }
-
-    return Object.fromEntries(
-      Object.entries(parsed).filter(([, value]) => isScriptProject(value)),
-    ) as Record<string, ScriptProject>
-  } catch {
-    return {}
-  }
-}
-
 const writeRecentProjectSnapshot = (project: ScriptProject) => {
-  try {
-    const snapshots = readRecentProjectSnapshots()
-    const nextEntries = [
-      [project.id, project] as const,
-      ...Object.entries(snapshots).filter(([id]) => id !== project.id),
-    ].slice(0, 12)
-
-    localStorage.setItem(
-      recentProjectSnapshotsKey,
-      JSON.stringify(Object.fromEntries(nextEntries)),
-    )
-    notifyLegacyMigrationStateChanged()
-  } catch {
-    // Ignore snapshot persistence failures; autosave still covers the current project.
-  }
+  void desktopBridge.writeRecentProjectSnapshot(project).then(() => {
+    if (desktopBridge.runtime === 'electron') {
+      notifyLegacyMigrationStateChanged()
+    }
+  })
 }
 
 const workspaceTabs: Array<{ id: WorkspaceTab; label: string }> = [
@@ -932,13 +909,25 @@ const getContinuousInsertTemplate = (type: BlockType): string => {
   }
 }
 
-function App() {
+interface AppProps {
+  initialInstallState?: InstallState | null
+}
+
+interface TutorialRestoreState {
+  appView: AppView
+  activeTab: WorkspaceTab
+  selectedSceneId: string | null
+  selectedBlockId: string | null
+  findReplaceOpen: boolean
+  fileMenuOpen: boolean
+  rightOutlineCollapsed: boolean
+}
+
+function App({ initialInstallState = null }: AppProps) {
   const [appView, setAppView] = useState<AppView>('home')
-  const [history, setHistory] = useState<HistoryState>(() => ({
-    past: [],
-    present: createEmptyProject(),
-    future: [],
-  }))
+  const [history, setHistory] = useState<ProjectHistoryState>(() =>
+    createProjectHistory(createEmptyProject()),
+  )
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('draft')
   const [statusMessage, setStatusMessage] = useState('Local-first mode active')
   const [savedPath, setSavedPath] = useState('Autosave only')
@@ -1023,6 +1012,8 @@ function App() {
     }
   })
   const [isCollaborationPanelOpen, setIsCollaborationPanelOpen] = useState(false)
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false)
+  const [tutorialStepIndex, setTutorialStepIndex] = useState(0)
   const [collaborationServerInput, setCollaborationServerInput] = useState('')
   const [collaborationRoomInput, setCollaborationRoomInput] = useState('')
   const [collaborationInviteInput, setCollaborationInviteInput] = useState('')
@@ -1585,6 +1576,9 @@ function App() {
     (targetProject: ScriptProject, projectPath?: string) => Promise<void>
   >(async () => undefined)
   const collaborationBootstrapAbortRef = useRef<AbortController | null>(null)
+  const tutorialIsManualRef = useRef(false)
+  const tutorialRestoreRef = useRef<TutorialRestoreState | null>(null)
+  const tutorialAutoStartedRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const findInputRef = useRef<HTMLInputElement | null>(null)
   const fileMenuRef = useRef<HTMLDivElement | null>(null)
@@ -1603,6 +1597,63 @@ function App() {
       return
     },
   })
+  const latestProjectRef = useRef(project)
+  const latestSavedPathRef = useRef(savedPath)
+  const dirtyProjectVersionRef = useRef(1)
+  const persistedProjectVersionRef = useRef(0)
+  const persistenceInFlightRef = useRef<Promise<void> | null>(null)
+
+  useEffect(() => {
+    latestProjectRef.current = project
+    latestSavedPathRef.current = savedPath
+    dirtyProjectVersionRef.current += 1
+  }, [project, savedPath])
+
+  const flushProjectPersistence = useCallback(async (force = false) => {
+    if (
+      !force &&
+      persistedProjectVersionRef.current >= dirtyProjectVersionRef.current
+    ) {
+      return
+    }
+
+    if (persistenceInFlightRef.current) {
+      await persistenceInFlightRef.current
+      if (
+        !force &&
+        persistedProjectVersionRef.current >= dirtyProjectVersionRef.current
+      ) {
+        return
+      }
+    }
+
+    const targetProject = latestProjectRef.current
+    const targetPath = latestSavedPathRef.current
+    const targetVersion = dirtyProjectVersionRef.current
+    const persistence = (async () => {
+      if (desktopBridge.runtime !== 'web') {
+        await desktopBridge.autosave(targetProject)
+        if (isLikelyLocalProjectPath(targetPath)) {
+          await desktopBridge.saveProjectPath(targetPath, targetProject)
+        }
+      } else {
+        localStorage.setItem(autosaveKey, JSON.stringify(targetProject))
+      }
+      await desktopBridge.writeRecentProjectSnapshot(targetProject)
+      persistedProjectVersionRef.current = Math.max(
+        persistedProjectVersionRef.current,
+        targetVersion,
+      )
+    })()
+    persistenceInFlightRef.current = persistence
+    try {
+      await persistence
+    } finally {
+      if (persistenceInFlightRef.current === persistence) {
+        persistenceInFlightRef.current = null
+      }
+    }
+  }, [])
 
   const persistProjectImmediately = useCallback(async (targetProject: ScriptProject) => {
     if (desktopBridge.runtime !== 'web') {
@@ -1610,7 +1661,7 @@ function App() {
     } else {
       localStorage.setItem(autosaveKey, JSON.stringify(targetProject))
     }
-    writeRecentProjectSnapshot(targetProject)
+    await desktopBridge.writeRecentProjectSnapshot(targetProject)
   }, [])
 
   const persistProjectToKnownPath = useCallback(
@@ -1630,7 +1681,7 @@ function App() {
   const applyRemoteCollaborationProject = useCallback((remoteProject: ScriptProject) => {
     const hydrated = hydrateProject(remoteProject)
     applyingCollaborationProjectRef.current = true
-    setHistory({ past: [], present: hydrated, future: [] })
+    setHistory(replaceProjectHistory(hydrated))
     setStatusMessage('Collaboration update received')
   }, [])
 
@@ -1813,48 +1864,33 @@ function App() {
     updater: (draft: ScriptProject) => void,
     nextStatus = 'Project updated',
   ) => {
-    setHistory((previous) => {
-      const nextProject = cloneProject(previous.present)
-      updater(nextProject)
-      nextProject.meta.updatedAt = new Date().toISOString()
-      return {
-        past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-        present: nextProject,
-        future: [],
-      }
-    })
+    setHistory((previous) =>
+      commitProjectHistory(previous, updater, nextStatus),
+    )
     setStatusMessage(nextStatus)
   }
 
-  const undo = () => {
-    setHistory((previous) => {
-      if (previous.past.length === 0) {
-        return previous
-      }
+  const commitReplacement = useCallback(
+    (
+      nextProject: ScriptProject,
+      nextStatus: string,
+      options: { coalesceKey?: string } = {},
+    ) => {
+      setHistory((previous) =>
+        commitProjectReplacement(previous, nextProject, nextStatus, options),
+      )
+      setStatusMessage(nextStatus)
+    },
+    [],
+  )
 
-      const prior = previous.past[previous.past.length - 1]
-      return {
-        past: previous.past.slice(0, -1),
-        present: prior,
-        future: [previous.present, ...previous.future],
-      }
-    })
+  const undo = () => {
+    setHistory(undoProjectHistory)
     setStatusMessage('Undid latest change')
   }
 
   const redo = () => {
-    setHistory((previous) => {
-      if (previous.future.length === 0) {
-        return previous
-      }
-
-      const upcoming = previous.future[0]
-      return {
-        past: [...previous.past, previous.present],
-        present: upcoming,
-        future: previous.future.slice(1),
-      }
-    })
+    setHistory(redoProjectHistory)
     setStatusMessage('Redid change')
   }
 
@@ -1867,7 +1903,7 @@ function App() {
           const result = await desktopBridge.readAutosave()
           if (active && result.ok && result.project) {
             const recovered = hydrateProject(result.project)
-            setHistory({ past: [], present: recovered, future: [] })
+            setHistory(replaceProjectHistory(recovered))
             setStatusMessage('Recovered desktop autosave')
             setAutosaveState('saved')
             void autoConnectCollaborationRef.current(recovered)
@@ -1883,7 +1919,7 @@ function App() {
         const parsed = JSON.parse(raw) as unknown
         if (active && isScriptProject(parsed)) {
           const recovered = hydrateProject(parsed)
-          setHistory({ past: [], present: recovered, future: [] })
+          setHistory(replaceProjectHistory(recovered))
           setStatusMessage('Recovered browser autosave')
           setAutosaveState('saved')
           void autoConnectCollaborationRef.current(recovered)
@@ -1954,17 +1990,7 @@ function App() {
       const persist = async () => {
         try {
           setAutosaveState('saving')
-          if (desktopBridge.runtime !== 'web') {
-            await desktopBridge.autosave(project)
-            if (
-              isLikelyLocalProjectPath(savedPath)
-            ) {
-              await desktopBridge.saveProjectPath(savedPath, project)
-            }
-          } else {
-            localStorage.setItem(autosaveKey, JSON.stringify(project))
-          }
-          writeRecentProjectSnapshot(project)
+          await flushProjectPersistence()
           setAutosaveState('saved')
         } catch {
           setAutosaveState('error')
@@ -1978,7 +2004,21 @@ function App() {
     return () => {
       window.clearTimeout(timer)
     }
-  }, [project, savedPath])
+  }, [flushProjectPersistence, project, savedPath])
+
+  useEffect(() => {
+    const flush = () => {
+      void flushProjectPersistence(true)
+    }
+    window.addEventListener('blur', flush)
+    window.addEventListener('beforeunload', flush)
+    return () => {
+      window.removeEventListener('blur', flush)
+      window.removeEventListener('beforeunload', flush)
+    }
+  }, [flushProjectPersistence])
+
+  useTauriCloseFlush(desktopBridge.runtime, flushProjectPersistence)
 
   useEffect(() => {
     if (!collaboration.isActive) {
@@ -2269,18 +2309,9 @@ function App() {
 
     setSelectedBlockId(blockId)
     queueFocus(blockId, selection, { highlight: false, scroll: false })
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: {
-        ...result.project,
-        meta: {
-          ...result.project.meta,
-          updatedAt: new Date().toISOString(),
-        },
-      },
-      future: [],
-    }))
-    setStatusMessage('Project updated')
+    commitReplacement(result.project, 'Project updated', {
+      coalesceKey: `block:${blockId}`,
+    })
   }
 
   const getTextareaSelection = (
@@ -2476,18 +2507,10 @@ function App() {
 
   const beginRevisionSet = () => {
     const nextProject = beginNextRevisionSet(project)
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: {
-        ...nextProject,
-        meta: {
-          ...nextProject.meta,
-          updatedAt: new Date().toISOString(),
-        },
-      },
-      future: [],
-    }))
-    setStatusMessage(`Started ${nextProject.meta.activeRevision} revision set`)
+    commitReplacement(
+      nextProject,
+      `Started ${nextProject.meta.activeRevision} revision set`,
+    )
   }
 
   const lockSelectedScene = () => {
@@ -2497,12 +2520,7 @@ function App() {
     }
 
     const nextProject = lockScene(project, resolvedSelectedSceneId)
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: nextProject,
-      future: [],
-    }))
-    setStatusMessage('Locked selected scene')
+    commitReplacement(nextProject, 'Locked selected scene')
   }
 
   const unlockSelectedScene = () => {
@@ -2512,12 +2530,7 @@ function App() {
     }
 
     const nextProject = unlockScene(project, resolvedSelectedSceneId)
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: nextProject,
-      future: [],
-    }))
-    setStatusMessage('Unlocked selected scene')
+    commitReplacement(nextProject, 'Unlocked selected scene')
   }
 
   const omitSelectedScene = () => {
@@ -2527,12 +2540,7 @@ function App() {
     }
 
     const nextProject = omitScene(project, resolvedSelectedSceneId)
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: nextProject,
-      future: [],
-    }))
-    setStatusMessage('Omitted selected scene')
+    commitReplacement(nextProject, 'Omitted selected scene')
   }
 
   const unomitSelectedScene = () => {
@@ -2542,12 +2550,7 @@ function App() {
     }
 
     const nextProject = unomitScene(project, resolvedSelectedSceneId)
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: nextProject,
-      future: [],
-    }))
-    setStatusMessage('Un-omitted selected scene')
+    commitReplacement(nextProject, 'Un-omitted selected scene')
   }
 
   const stashContinuousSelection = () => {
@@ -2579,12 +2582,7 @@ function App() {
       start + selectedText.length,
       'Stashed alternate',
     )
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: stashed.project,
-      future: [],
-    }))
-    setStatusMessage('Stashed selected dialogue')
+    commitReplacement(stashed.project, 'Stashed selected dialogue')
   }
 
   const swapStashIntoFirstDialogue = (stashId: string) => {
@@ -2595,12 +2593,7 @@ function App() {
     }
 
     const nextProject = swapStashIntoDialogue(project, stashId, target.id)
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: nextProject,
-      future: [],
-    }))
-    setStatusMessage('Swapped stashed dialogue into script')
+    commitReplacement(nextProject, 'Swapped stashed dialogue into script')
   }
 
   const saveRevisionSnapshot = () => {
@@ -2675,6 +2668,7 @@ function App() {
     if (desktopBridge.runtime !== 'web') {
       const result = await desktopBridge.saveProject(project, project.meta.title)
       if (result.ok) {
+        await desktopBridge.autosave(project)
         setSavedPath(result.path ?? 'Saved with desktop file picker')
         setStatusMessage('Project saved to disk')
         if (result.path) {
@@ -2701,7 +2695,7 @@ function App() {
       if (result.ok && result.project) {
         const loadedProject = hydrateProject(result.project)
         await collaboration.stop()
-        setHistory({ past: [], present: loadedProject, future: [] })
+        setHistory(replaceProjectHistory(loadedProject))
         setAppView('workspace')
         setSavedPath(result.path ?? 'Opened from desktop picker')
         if (result.path) {
@@ -2724,7 +2718,7 @@ function App() {
         if (result.ok && result.project) {
           const recovered = hydrateProject(result.project)
           await collaboration.stop()
-          setHistory({ past: [], present: recovered, future: [] })
+          setHistory(replaceProjectHistory(recovered))
           setAppView('workspace')
           setSavedPath(entry.label)
           writeRecentProjectSnapshot(recovered)
@@ -2740,7 +2734,7 @@ function App() {
           if (isScriptProject(parsed)) {
             const recovered = hydrateProject(parsed)
             await collaboration.stop()
-            setHistory({ past: [], present: recovered, future: [] })
+            setHistory(replaceProjectHistory(recovered))
             setAppView('workspace')
             setSavedPath(entry.label)
             writeRecentProjectSnapshot(recovered)
@@ -2760,11 +2754,13 @@ function App() {
 
   const openRecentProject = async (entry: RecentProjectEntry) => {
     if (entry.projectId) {
-      const snapshot = readRecentProjectSnapshots()[entry.projectId]
+      const snapshot = (await desktopBridge.readRecentProjectSnapshots())[
+        entry.projectId
+      ]
       if (snapshot) {
         const loadedProject = hydrateProject(snapshot)
         await collaboration.stop()
-        setHistory({ past: [], present: loadedProject, future: [] })
+        setHistory(replaceProjectHistory(loadedProject))
         setAppView('workspace')
         setSavedPath(entry.label)
         writeRecentProjectSnapshot(loadedProject)
@@ -2805,7 +2801,7 @@ function App() {
       if (result.ok && result.project) {
         const loadedProject = hydrateProject(result.project)
         await collaboration.stop()
-        setHistory({ past: [], present: loadedProject, future: [] })
+        setHistory(replaceProjectHistory(loadedProject))
         setAppView('workspace')
         setSavedPath(result.path ?? entry.label)
         writeRecentProjectSnapshot(loadedProject)
@@ -2842,11 +2838,7 @@ function App() {
 
         const loadedProject = hydrateProject(parsed)
         void collaboration.stop()
-        setHistory({
-          past: [],
-          present: loadedProject,
-          future: [],
-        })
+        setHistory(replaceProjectHistory(loadedProject))
         setAppView('workspace')
         setSavedPath(selectedFile.name)
         writeRecentProjectSnapshot(loadedProject)
@@ -2865,7 +2857,7 @@ function App() {
   const createNewProject = () => {
     const fresh = createEmptyProject()
     void collaboration.stop()
-    setHistory({ past: [], present: fresh, future: [] })
+    setHistory(replaceProjectHistory(fresh))
     setAppView('workspace')
     setActiveTab('draft')
     setPreviewPageIndex(0)
@@ -3045,7 +3037,7 @@ function App() {
       }
 
       await collaboration.finishBootstrap(hydrated)
-      setHistory({ past: [], present: hydrated, future: [] })
+      setHistory(replaceProjectHistory(hydrated))
       setAppView('workspace')
       setActiveTab('draft')
       setPreviewPageIndex(0)
@@ -3113,11 +3105,7 @@ function App() {
     }
 
     void collaboration.stop()
-    setHistory({
-      past: [],
-      present: hydrated,
-      future: [],
-    })
+    setHistory(replaceProjectHistory(hydrated))
     setAppView('workspace')
     writeRecentProjectSnapshot(hydrated)
     if (path) {
@@ -3465,81 +3453,26 @@ function App() {
   }
 
   const applyStoryProject = (nextProject: ScriptProject, message: string) => {
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: {
-        ...nextProject,
-        meta: {
-          ...nextProject.meta,
-          updatedAt: new Date().toISOString(),
-        },
-      },
-      future: [],
-    }))
-    setStatusMessage(message)
+    commitReplacement(nextProject, message)
   }
 
   const applyProductivityProject = useCallback(
     (nextProject: ScriptProject, message: string) => {
-      setHistory((previous) => ({
-        past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-        present: {
-          ...nextProject,
-          meta: {
-            ...nextProject.meta,
-            updatedAt: new Date().toISOString(),
-          },
-        },
-        future: [],
-      }))
-      setStatusMessage(message)
+      commitReplacement(nextProject, message)
     },
-    [],
+    [commitReplacement],
   )
 
   const applyProductionProject = (nextProject: ScriptProject, message: string) => {
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: {
-        ...nextProject,
-        meta: {
-          ...nextProject.meta,
-          updatedAt: new Date().toISOString(),
-        },
-      },
-      future: [],
-    }))
-    setStatusMessage(message)
+    commitReplacement(nextProject, message)
   }
 
   const applyTaggingProject = (nextProject: ScriptProject, message: string) => {
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: {
-        ...nextProject,
-        meta: {
-          ...nextProject.meta,
-          updatedAt: new Date().toISOString(),
-        },
-      },
-      future: [],
-    }))
-    setStatusMessage(message)
+    commitReplacement(nextProject, message)
   }
 
   const applyAdvancedProject = (nextProject: ScriptProject, message: string) => {
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: {
-        ...nextProject,
-        meta: {
-          ...nextProject.meta,
-          updatedAt: new Date().toISOString(),
-        },
-      },
-      future: [],
-    }))
-    setStatusMessage(message)
+    commitReplacement(nextProject, message)
   }
 
   const toggleProductivityMode = (
@@ -4565,20 +4498,12 @@ function App() {
     }
 
     const renamed = renameCharacterEverywhere(project, renameFrom, renameTo)
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: {
-        ...renamed,
-        meta: {
-          ...renamed.meta,
-          updatedAt: new Date().toISOString(),
-        },
-      },
-      future: [],
-    }))
+    commitReplacement(
+      renamed,
+      'Renamed character across script, catalog, and breakdown',
+    )
     setRenameFrom('')
     setRenameTo('')
-    setStatusMessage('Renamed character across script, catalog, and breakdown')
   }
 
   const rebuildCatalogFromCurrentScript = () => {
@@ -4590,18 +4515,7 @@ function App() {
 
   const syncCharacterProfiles = () => {
     const nextProject = ensureProfilesFromScript(project)
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: {
-        ...nextProject,
-        meta: {
-          ...nextProject.meta,
-          updatedAt: new Date().toISOString(),
-        },
-      },
-      future: [],
-    }))
-    setStatusMessage('Synced character profiles from script')
+    commitReplacement(nextProject, 'Synced character profiles from script')
   }
 
   const updateSelectedCharacterProfile = (
@@ -4618,18 +4532,7 @@ function App() {
     }
 
     const nextProject = upsertCharacterProfile(project, resolvedCharacterName, updates)
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: {
-        ...nextProject,
-        meta: {
-          ...nextProject.meta,
-          updatedAt: new Date().toISOString(),
-        },
-      },
-      future: [],
-    }))
-    setStatusMessage('Updated character profile')
+    commitReplacement(nextProject, 'Updated character profile')
   }
 
   const addSelectedCharacterCustomField = () => {
@@ -4670,14 +4573,9 @@ function App() {
       relationshipTo,
       relationshipLabel || 'connected to',
     )
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: nextProject,
-      future: [],
-    }))
+    commitReplacement(nextProject, 'Added character relationship')
     setRelationshipTo('')
     setRelationshipLabel('')
-    setStatusMessage('Added character relationship')
   }
 
   const removeSelectedCharacterRelationship = (relationshipId: string) => {
@@ -4699,12 +4597,7 @@ function App() {
       resolvedSelectedSceneId,
       stage,
     )
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: nextProject,
-      future: [],
-    }))
-    setStatusMessage('Updated character arc stage')
+    commitReplacement(nextProject, 'Updated character arc stage')
   }
 
   const markRecentDialogueAsDual = () => {
@@ -4714,18 +4607,10 @@ function App() {
       return
     }
 
-    setHistory((previous) => ({
-      past: [...previous.past.slice(-(historyLimit - 1)), previous.present],
-      present: {
-        ...updated,
-        meta: {
-          ...updated.meta,
-          updatedAt: new Date().toISOString(),
-        },
-      },
-      future: [],
-    }))
-    setStatusMessage('Marked the last two dialogue groups as dual dialogue')
+    commitReplacement(
+      updated,
+      'Marked the last two dialogue groups as dual dialogue',
+    )
   }
 
   const applyCharacterSuggestion = (blockId: string, name: string) => {
@@ -4950,6 +4835,100 @@ function App() {
     return false
   }
 
+  const startTutorial = useCallback(
+    (manual = true) => {
+      tutorialIsManualRef.current = manual
+      tutorialRestoreRef.current = {
+        appView,
+        activeTab,
+        selectedSceneId,
+        selectedBlockId,
+        findReplaceOpen: isFindReplaceOpen,
+        fileMenuOpen: false,
+        rightOutlineCollapsed: isRightOutlineCollapsed,
+      }
+      setTutorialStepIndex(0)
+      setIsTutorialOpen(true)
+    },
+    [
+      activeTab,
+      appView,
+      isFindReplaceOpen,
+      isRightOutlineCollapsed,
+      selectedBlockId,
+      selectedSceneId,
+    ],
+  )
+
+  const completeTutorial = useCallback(async () => {
+    const restore = tutorialRestoreRef.current
+    const wasManual = tutorialIsManualRef.current
+    setIsTutorialOpen(false)
+    setIsFindReplaceOpen(false)
+    setIsFileMenuOpen(false)
+
+    if (wasManual && restore) {
+      setAppView(restore.appView)
+      setActiveTab(restore.activeTab)
+      setSelectedSceneId(restore.selectedSceneId)
+      setSelectedBlockId(restore.selectedBlockId)
+      setIsFindReplaceOpen(restore.findReplaceOpen)
+      setIsFileMenuOpen(restore.fileMenuOpen)
+      setIsRightOutlineCollapsed(restore.rightOutlineCollapsed)
+    } else {
+      setAppView('home')
+    }
+
+    tutorialRestoreRef.current = null
+    await desktopBridge.setTutorialCompleted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!isTutorialOpen) {
+      return
+    }
+
+    if (tutorialStepIndex === 0) {
+      setAppView('home')
+    } else {
+      setAppView('workspace')
+      if (tutorialStepIndex <= 4) {
+        setActiveTab('draft')
+      }
+    }
+
+    setIsFindReplaceOpen(tutorialStepIndex === 4)
+    setIsFileMenuOpen(tutorialStepIndex === 6)
+    if (tutorialStepIndex === 3) {
+      setIsRightOutlineCollapsed(false)
+    }
+  }, [isTutorialOpen, tutorialStepIndex])
+
+  useEffect(() => {
+    let active = true
+
+    const openForFreshInstall = async () => {
+      const installState =
+        initialInstallState ?? (await desktopBridge.getInstallState())
+      if (
+        active &&
+        !tutorialAutoStartedRef.current &&
+        shouldOpenTutorialAutomatically(installState)
+      ) {
+        tutorialAutoStartedRef.current = true
+        tutorialIsManualRef.current = false
+        tutorialRestoreRef.current = null
+        setTutorialStepIndex(0)
+        setIsTutorialOpen(true)
+      }
+    }
+
+    void openForFreshInstall()
+    return () => {
+      active = false
+    }
+  }, [initialInstallState])
+
   const runFileMenuItem = (itemId: WorkspaceFileMenuItemId) => {
     if (isFileMenuItemDisabled(itemId)) {
       return
@@ -4994,6 +4973,9 @@ function App() {
         return
       case 'snapshots':
         openSnapshotHistory()
+        return
+      case 'tutorial':
+        startTutorial(true)
         return
       case 'undo':
         undo()
@@ -5246,7 +5228,7 @@ function App() {
               Start a new screenplay, open an existing project, or import a Fountain file.
             </p>
 
-            <div className="home-actions">
+            <div className="home-actions" data-tutorial="home-actions">
               {showDownloadButton && (
                 <div className="download-links" aria-label="Desktop app downloads">
                   {DESKTOP_DOWNLOAD_LINKS.map((link) => (
@@ -5273,6 +5255,9 @@ function App() {
               </button>
               <button className="ghost-btn" onClick={toggleThemeMode}>
                 Settings (Theme: {themeMode === 'dark' ? 'Dark' : 'Light'})
+              </button>
+              <button className="ghost-btn" onClick={() => startTutorial(true)}>
+                Tutorial
               </button>
             </div>
 
@@ -5359,8 +5344,12 @@ function App() {
           </label>
         </div>
 
-        <div className="header-actions">
-          <div className="file-menu-wrap" ref={fileMenuRef}>
+        <div className="header-actions" data-tutorial="collaboration-saving">
+          <div
+            className="file-menu-wrap"
+            ref={fileMenuRef}
+            data-tutorial="file-menu"
+          >
             <button
               className="ghost-btn file-menu-trigger"
               type="button"
@@ -5417,7 +5406,7 @@ function App() {
       </header>
 
       <div className="workspace-shell">
-        <aside className="left-rail">
+        <aside className="left-rail" data-tutorial="workspace-rail">
           <div className="rail-group">
             {workspaceTabs.slice(0, 4).map((tab) => (
               <button
@@ -5461,7 +5450,7 @@ function App() {
         </aside>
 
         <main className="editor-shell">
-          <div className="editor-scroll">
+          <div className="editor-scroll" data-tutorial="draft-editor">
             {activeTab === 'draft' && useContinuousDraftEditor && (
               <section className="script-page continuous-draft-page tab-enter" data-purpose="script-page">
                 <textarea
@@ -6842,6 +6831,7 @@ function App() {
               className="find-replace-panel find-replace-widget"
               role="search"
               aria-label="Find and Replace"
+              data-tutorial="find-replace"
             >
               <div className="find-replace-head">
                 <strong>Find and Replace</strong>
@@ -6902,7 +6892,11 @@ function App() {
           )}
 
           {activeTab === 'draft' && !useContinuousDraftEditor && (
-            <div className="floating-toolbar" data-purpose="formatter-toolbar">
+            <div
+              className="floating-toolbar"
+              data-purpose="formatter-toolbar"
+              data-tutorial="formatting-toolbar"
+            >
               <button
                 className={
                   selectedBlock?.type === 'scene-heading'
@@ -6947,7 +6941,10 @@ function App() {
           )}
         </main>
 
-        <aside className={isRightOutlineCollapsed ? 'right-outline collapsed' : 'right-outline'}>
+        <aside
+          className={isRightOutlineCollapsed ? 'right-outline collapsed' : 'right-outline'}
+          data-tutorial="scene-outline"
+        >
           {isRightOutlineCollapsed ? (
             <button
               className="right-outline-tab"
@@ -7558,6 +7555,23 @@ function App() {
         style={{ display: 'none' }}
         onChange={onProjectFilePicked}
       />
+      {isTutorialOpen && (
+        <Suspense fallback={null}>
+          <GuidedTutorial
+            stepIndex={tutorialStepIndex}
+            onBack={() =>
+              setTutorialStepIndex((current) => Math.max(0, current - 1))
+            }
+            onNext={() =>
+              setTutorialStepIndex((current) =>
+                Math.min(tutorialSteps.length - 1, current + 1),
+              )
+            }
+            onSkip={() => void completeTutorial()}
+            onFinish={() => void completeTutorial()}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }

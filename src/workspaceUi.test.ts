@@ -24,6 +24,7 @@ describe('workspace chrome UI', () => {
       'Print Preview',
       'Theme',
       'Snapshots',
+      'Tutorial',
       'Undo',
       'Redo',
     ])

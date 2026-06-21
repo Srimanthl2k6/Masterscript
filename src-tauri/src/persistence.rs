@@ -26,6 +26,12 @@ pub fn write_json_atomic<T: Serialize>(file_path: &Path, value: &T) -> io::Resul
     write_bytes_atomic(file_path, &bytes)
 }
 
+pub fn write_compact_json_atomic<T: Serialize>(file_path: &Path, value: &T) -> io::Result<()> {
+    let bytes = serde_json::to_vec(value)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+    write_bytes_atomic(file_path, &bytes)
+}
+
 pub fn read_json<T: DeserializeOwned>(file_path: &Path) -> io::Result<T> {
     let raw = fs::read(file_path)?;
     serde_json::from_slice(&raw).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
@@ -37,7 +43,7 @@ pub fn read_json_value(file_path: &Path) -> io::Result<serde_json::Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{read_json, write_json_atomic};
+    use super::{read_json, write_compact_json_atomic, write_json_atomic};
     use serde::{Deserialize, Serialize};
     use tempfile::tempdir;
 
@@ -57,6 +63,19 @@ mod tests {
         assert_eq!(
             read_json::<Example>(&file_path).expect("read replacement"),
             Example { value: 2 }
+        );
+    }
+
+    #[test]
+    fn compact_json_avoids_pretty_print_overhead() {
+        let directory = tempdir().expect("temp directory");
+        let file_path = directory.path().join("compact.json");
+
+        write_compact_json_atomic(&file_path, &Example { value: 7 }).expect("compact write");
+
+        assert_eq!(
+            std::fs::read_to_string(file_path).expect("read"),
+            r#"{"value":7}"#
         );
     }
 }

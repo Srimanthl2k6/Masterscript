@@ -1,10 +1,13 @@
 import {
   hostedLanRoomsKey,
-  recentProjectSnapshotsKey,
   recentProjectsKey,
   themeKey,
 } from './storageKeys'
-import type { DesktopBridge, MigrationManifestV1 } from './types'
+import type {
+  BootstrapInstallationResult,
+  DesktopBridge,
+  MigrationManifestV1,
+} from './types'
 
 interface MigrationStorage {
   getItem(key: string): string | null
@@ -28,10 +31,6 @@ export const applyMigrationManifestToStorage = (
 
   storage.setItem(themeKey, manifest.theme)
   storage.setItem(recentProjectsKey, JSON.stringify(manifest.recentProjects))
-  storage.setItem(
-    recentProjectSnapshotsKey,
-    JSON.stringify(manifest.recentProjectSnapshots),
-  )
   storage.setItem(hostedLanRoomsKey, JSON.stringify(manifest.hostedLanRooms))
   storage.setItem(tauriMigrationAppliedKey, '1')
   return true
@@ -40,13 +39,14 @@ export const applyMigrationManifestToStorage = (
 export const initializeDesktopRuntime = async (
   bridge: DesktopBridge,
   storage: MigrationStorage,
-): Promise<void> => {
+): Promise<BootstrapInstallationResult | null> => {
   if (bridge.runtime !== 'tauri') {
-    return
+    return null
   }
 
   const result = await bridge.bootstrapInstallation()
   if (result.migrationManifest) {
     applyMigrationManifestToStorage(storage, result.migrationManifest)
   }
+  return result
 }

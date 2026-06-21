@@ -3,6 +3,7 @@ export const themeKey = 'masterscript-theme-v1'
 export const recentProjectsKey = 'masterscript-recent-v1'
 export const recentProjectSnapshotsKey = 'masterscript-recent-project-snapshots-v1'
 export const hostedLanRoomsKey = 'masterscript-hosted-lan-rooms-v1'
+export const tutorialCompletedKey = 'masterscript-tutorial-completed-v1'
 export const legacyMigrationStateChangedEvent =
   'masterscript:migration-state-changed'
 

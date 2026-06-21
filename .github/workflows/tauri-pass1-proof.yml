@@ -1,4 +1,4 @@
-name: Tauri Desktop Compatibility Proof
+name: Tauri Release Gate
 
 on:
   workflow_dispatch:
@@ -15,6 +15,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       GH_TOKEN: ${{ github.token }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     strategy:
       fail-fast: false
       matrix:
@@ -102,6 +104,9 @@ jobs:
           if (-not (Test-Path -LiteralPath $sentinel)) {
             throw 'Tauri installation removed Electron application data'
           }
+          if (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'Programs\MasterScript')) {
+            throw 'The legacy Electron application directory was not removed'
+          }
 
       - name: Prove macOS Electron-to-Tauri app replacement preserves legacy data
         if: matrix.platform == 'macos'
@@ -136,6 +141,22 @@ jobs:
 
           test -f "$HOME/.config/MasterScript/pass1-migration-sentinel.json"
           dpkg -s masterscript
+
+      - name: Enforce Windows RAM and installed-footprint thresholds
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $executable = (Resolve-Path 'src-tauri\target\release\masterscript.exe').Path
+          $installer = (Get-ChildItem 'src-tauri\target\release\bundle\nsis\*.exe' | Select-Object -First 1).FullName
+          npm run benchmark:tauri -- "--executable=$executable" "--installer=$installer"
+
+      - name: Upload Windows performance evidence
+        if: matrix.platform == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-pass8-performance
+          path: analysis/tauri-pass8/tauri-runtime-result.json
+          if-no-files-found: error
 
       - name: Upload internal compatibility artifact
         uses: actions/upload-artifact@v4

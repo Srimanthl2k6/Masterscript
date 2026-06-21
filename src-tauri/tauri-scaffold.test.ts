@@ -18,8 +18,16 @@ describe('Pass 1 Tauri shell', () => {
     expect(tauriConfig.build.beforeBuildCommand).toBe('npm run build:web')
   })
 
-  it('is explicitly marked as a non-release compatibility shell', () => {
-    expect(tauriConfig.bundle.active).toBe(false)
+  it('is configured as the release desktop shell', () => {
+    expect(tauriConfig.bundle.active).toBe(true)
+    expect(tauriConfig.bundle.createUpdaterArtifacts).toBe(true)
+    expect(tauriConfig.plugins.updater.endpoints).toEqual([
+      'https://github.com/Srimanthl2k6/Masterscript/releases/latest/download/latest.json',
+    ])
+    expect(tauriConfig.plugins.updater.pubkey).toBeTruthy()
+    expect(tauriConfig.bundle.windows.nsis.installerHooks).toBe(
+      './windows/migration-hooks.nsh',
+    )
     expect(tauriConfig.app.windows[0]).toMatchObject({
       width: 1600,
       height: 980,
@@ -46,6 +54,8 @@ describe('Pass 1 Tauri shell', () => {
     for (const command of [
       'project_autosave',
       'project_read_autosave',
+      'project_read_recent_snapshots',
+      'project_write_recent_snapshot',
       'project_save_file',
       'project_save_path',
       'project_open_file',

@@ -2359,6 +2359,78 @@ kbd {
   overflow-y: auto;
 }
 
+.tutorial-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  pointer-events: none;
+}
+
+.tutorial-dimmer {
+  display: none;
+}
+
+.tutorial-spotlight {
+  position: fixed;
+  z-index: 1201;
+  border: 2px solid #8eb7ff;
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 9999px rgb(4 8 18 / 62%),
+    0 0 0 4px rgb(85 139 255 / 24%);
+  transition: inset 160ms ease, width 160ms ease, height 160ms ease;
+}
+
+.tutorial-card {
+  position: fixed;
+  z-index: 1202;
+  top: 112px;
+  right: 24px;
+  width: min(380px, calc(100vw - 32px));
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 38%);
+  pointer-events: auto;
+}
+
+.tutorial-card-left {
+  right: auto;
+  left: 24px;
+}
+
+.tutorial-card h2 {
+  margin: 4px 0 10px;
+}
+
+.tutorial-card > p:not(.tutorial-progress) {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.tutorial-progress {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tutorial-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.tutorial-actions > div {
+  display: flex;
+  gap: 8px;
+}
+
 .find-replace-head {
   display: flex;
   justify-content: space-between;

@@ -1,8 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import * as Y from 'yjs'
-import { IndexeddbPersistence } from 'y-indexeddb'
-import { WebrtcProvider } from 'y-webrtc'
-import { waitForRenderableProject } from './bootstrapCollaboration'
 import {
   applyCollaborationMeta,
   parseCollaborationInvite,
@@ -10,18 +6,6 @@ import {
   type CollaborationProjectMode,
 } from './collaborationInvite'
 import { DEFAULT_RTC_CONFIGURATION, DEFAULT_SIGNALING_SERVERS } from './collaborationConfig'
-import {
-  EncryptedLanProvider,
-  createInviteCode,
-  parseInviteCode,
-} from './encryptedLanProvider'
-import {
-  LOCAL_ORIGIN,
-  applyProjectToYDoc,
-  hasRenderableProject,
-  scriptProjectToYDoc,
-  yDocToScriptProject,
-} from './projectYjs'
 import type { ScriptProject } from '../../types/screenplay'
 import { desktopBridge } from '../desktop/desktopBridge'
 
@@ -78,15 +62,22 @@ interface StopOptions {
   flush?: boolean
 }
 
+type YDoc = import('yjs').Doc
+
 type Provider =
-  | EncryptedLanProvider
-  | WebrtcProvider
+  | import('./encryptedLanProvider').EncryptedLanProvider
+  | import('y-webrtc').WebrtcProvider
   | {
       disconnect: () => void
       destroy?: () => void
       on?: (event: string, listener: (event: unknown) => void) => void
       off?: (event: string, listener: (event: unknown) => void) => void
     }
+
+type Persistence = {
+  whenSynced: Promise<unknown>
+  destroy: () => Promise<void>
+}
 
 const createRoomId = (project: ScriptProject): string => {
   const suffix =
@@ -106,19 +97,21 @@ const collaborationMetaMatches = (
   (details.mode === 'webrtc' ||
     project.meta.collaborationLanServerUrl === details.lanServerUrl)
 
-const resolveCollaborationDetails = (
+const resolveCollaborationDetails = async (
   project: ScriptProject,
   mode: CollaborationProjectMode,
   explicit: Partial<CollaborationInviteDetails> = {},
-): { details: CollaborationInviteDetails; project: ScriptProject } => {
+): Promise<{ details: CollaborationInviteDetails; project: ScriptProject }> => {
   const roomId =
     explicit.roomId?.trim() ||
     project.meta.collaborationRoomId?.trim() ||
     createRoomId(project)
-  const inviteKey =
-    explicit.inviteKey?.trim() ||
-    project.meta.collaborationInviteKey?.trim() ||
-    createInviteCode().inviteCode
+  let inviteKey =
+    explicit.inviteKey?.trim() || project.meta.collaborationInviteKey?.trim()
+  if (!inviteKey) {
+    const { createInviteCode } = await import('./encryptedLanProvider')
+    inviteKey = createInviteCode().inviteCode
+  }
   const lanServerUrl =
     explicit.lanServerUrl?.trim() || project.meta.collaborationLanServerUrl?.trim()
   const details: CollaborationInviteDetails =
@@ -167,20 +160,25 @@ export const useCollaborationSession = ({
 }: UseCollaborationSessionOptions) => {
   const [status, setStatus] = useState<CollaborationStatus>('offline')
   const [sessionInfo, setSessionInfo] = useState<CollaborationSessionInfo | null>(null)
-  const ydocRef = useRef<Y.Doc | null>(null)
+  const ydocRef = useRef<YDoc | null>(null)
   const providerRef = useRef<Provider | null>(null)
-  const persistenceRef = useRef<IndexeddbPersistence | null>(null)
+  const persistenceRef = useRef<Persistence | null>(null)
   const documentCleanupRef = useRef<(() => void) | null>(null)
   const remoteUpdatesPausedRef = useRef(false)
   const lastProjectRef = useRef<ScriptProject | null>(null)
 
   const flushAutosave = useCallback(async () => {
     const ydoc = ydocRef.current
-    if (!ydoc || !hasRenderableProject(ydoc)) {
+    if (!ydoc) {
       return
     }
 
-    await autosaveProject(yDocToScriptProject(ydoc))
+    const { hasRenderableProject, yDocToScriptProject } = await import(
+      './projectYjs'
+    )
+    if (hasRenderableProject(ydoc)) {
+      await autosaveProject(yDocToScriptProject(ydoc))
+    }
   }, [autosaveProject])
 
   const destroyProvider = useCallback(async () => {
@@ -214,10 +212,14 @@ export const useCollaborationSession = ({
 
   const attachDocument = useCallback(
     async (
-      ydoc: Y.Doc,
+      ydoc: YDoc,
       roomId: string,
       options: { pauseRemoteUpdates?: boolean } = {},
     ) => {
+      const [{ IndexeddbPersistence }, projectYjs] = await Promise.all([
+        import('y-indexeddb'),
+        import('./projectYjs'),
+      ])
       documentCleanupRef.current?.()
       documentCleanupRef.current = null
       remoteUpdatesPausedRef.current = Boolean(options.pauseRemoteUpdates)
@@ -229,13 +231,13 @@ export const useCollaborationSession = ({
       const onUpdate = (_update: Uint8Array, origin: unknown) => {
         if (
           remoteUpdatesPausedRef.current ||
-          origin === LOCAL_ORIGIN ||
-          !hasRenderableProject(ydoc)
+          origin === projectYjs.LOCAL_ORIGIN ||
+          !projectYjs.hasRenderableProject(ydoc)
         ) {
           return
         }
 
-        onRemoteProject(yDocToScriptProject(ydoc))
+        onRemoteProject(projectYjs.yDocToScriptProject(ydoc))
       }
 
       ydoc.on('update', onUpdate)
@@ -309,7 +311,7 @@ export const useCollaborationSession = ({
       }
 
       await stop()
-      const initial = resolveCollaborationDetails(project, 'lan')
+      const initial = await resolveCollaborationDetails(project, 'lan')
       const hostResult = (await desktopBridge.hostLanCollaboration({
         roomId: initial.details.roomId,
       })) as LanHostResult
@@ -328,6 +330,11 @@ export const useCollaborationSession = ({
         : applyCollaborationMeta(initial.project, details)
       await persistResolvedProject(updatedProject)
 
+      const [{ EncryptedLanProvider, parseInviteCode }, { scriptProjectToYDoc }] =
+        await Promise.all([
+          import('./encryptedLanProvider'),
+          import('./projectYjs'),
+        ])
       const { secret, salt } = parseInviteCode(details.inviteKey)
       const ydoc = scriptProjectToYDoc(updatedProject)
       await attachDocument(ydoc, details.roomId)
@@ -380,7 +387,7 @@ export const useCollaborationSession = ({
         }
       }
 
-      const resolved = resolveCollaborationDetails(project, 'lan', {
+      const resolved = await resolveCollaborationDetails(project, 'lan', {
         mode: 'lan',
         roomId: normalizedRoomId,
         inviteKey: inviteCode,
@@ -390,6 +397,11 @@ export const useCollaborationSession = ({
       const updatedProject = resolved.project
       await persistResolvedProject(updatedProject)
 
+      const [{ EncryptedLanProvider, parseInviteCode }, { scriptProjectToYDoc }] =
+        await Promise.all([
+          import('./encryptedLanProvider'),
+          import('./projectYjs'),
+        ])
       const { secret, salt } = parseInviteCode(details.inviteKey)
       const ydoc = scriptProjectToYDoc(updatedProject)
       await attachDocument(ydoc, details.roomId)
@@ -421,13 +433,17 @@ export const useCollaborationSession = ({
     ): Promise<CollaborationStartResult> => {
       void options
       await stop()
-      const resolved = resolveCollaborationDetails(project, 'webrtc', {
+      const resolved = await resolveCollaborationDetails(project, 'webrtc', {
         mode: 'webrtc',
         roomId,
         inviteKey: inviteCode,
       })
       await persistResolvedProject(resolved.project)
 
+      const [{ WebrtcProvider }, { scriptProjectToYDoc }] = await Promise.all([
+        import('y-webrtc'),
+        import('./projectYjs'),
+      ])
       const ydoc = scriptProjectToYDoc(resolved.project)
       await attachDocument(ydoc, resolved.details.roomId)
       const provider = new WebrtcProvider(resolved.details.roomId, ydoc, {
@@ -454,7 +470,13 @@ export const useCollaborationSession = ({
       await stop({ flush: false })
       options.onStatus?.('Bootstrapping collaboration project...')
       const details = parseCollaborationInvite(invite)
-      const ydoc = new Y.Doc()
+      const [{ Doc }, { waitForRenderableProject }, projectYjs] =
+        await Promise.all([
+          import('yjs'),
+          import('./bootstrapCollaboration'),
+          import('./projectYjs'),
+        ])
+      const ydoc = new Doc()
       await attachDocument(ydoc, details.roomId, { pauseRemoteUpdates: true })
 
       let provider: Provider
@@ -462,6 +484,9 @@ export const useCollaborationSession = ({
         if (!details.lanServerUrl) {
           throw new Error('LAN invite is missing a server URL')
         }
+        const { EncryptedLanProvider, parseInviteCode } = await import(
+          './encryptedLanProvider'
+        )
         const { secret, salt } = parseInviteCode(details.inviteKey)
         provider = new EncryptedLanProvider({
           roomId: details.roomId,
@@ -472,6 +497,7 @@ export const useCollaborationSession = ({
           publishInitialState: false,
         })
       } else {
+        const { WebrtcProvider } = await import('y-webrtc')
         provider = new WebrtcProvider(details.roomId, ydoc, {
           signaling: DEFAULT_SIGNALING_SERVERS,
           password: details.inviteKey,
@@ -509,7 +535,10 @@ export const useCollaborationSession = ({
         throw error
       }
 
-      const project = applyCollaborationMeta(yDocToScriptProject(ydoc), details)
+      const project = applyCollaborationMeta(
+        projectYjs.yDocToScriptProject(ydoc),
+        details,
+      )
       return { sessionInfo, project }
     },
     [attachDocument, bindProviderStatus, destroyProvider, stop],
@@ -523,6 +552,7 @@ export const useCollaborationSession = ({
       }
 
       lastProjectRef.current = project
+      const { applyProjectToYDoc, LOCAL_ORIGIN } = await import('./projectYjs')
       applyProjectToYDoc(ydoc, project, LOCAL_ORIGIN)
       remoteUpdatesPausedRef.current = false
       await autosaveProject(project)
@@ -537,18 +567,18 @@ export const useCollaborationSession = ({
       return
     }
 
-    applyProjectToYDoc(ydoc, project, LOCAL_ORIGIN)
+    void import('./projectYjs').then(({ applyProjectToYDoc, LOCAL_ORIGIN }) => {
+      if (ydocRef.current === ydoc) {
+        applyProjectToYDoc(ydoc, project, LOCAL_ORIGIN)
+      }
+    })
   }, [])
 
   useEffect(() => {
     const onBeforeUnload = () => {
-      const ydoc = ydocRef.current
-      if (!ydoc || !hasRenderableProject(ydoc)) {
-        return
+      if (lastProjectRef.current) {
+        void autosaveProject(lastProjectRef.current)
       }
-
-      const project = yDocToScriptProject(ydoc)
-      void autosaveProject(project)
     }
 
     window.addEventListener('beforeunload', onBeforeUnload)

@@ -1,4 +1,4 @@
-const downloadReleaseVersion = '0.1.13'
+const downloadReleaseVersion = '0.2.0'
 const releaseBaseUrl =
   `https://github.com/Srimanthl2k6/Masterscript/releases/download/v${downloadReleaseVersion}`
 
@@ -20,4 +20,5 @@ export const DESKTOP_DOWNLOAD_LINKS = [
   },
 ]
 
-export const shouldShowDownloadButton = (isElectron: boolean) => !isElectron
+export const shouldShowDownloadButton = (isDesktopRuntime: boolean) =>
+  !isDesktopRuntime

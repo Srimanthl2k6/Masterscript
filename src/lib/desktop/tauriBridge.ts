@@ -26,6 +26,10 @@ export const createTauriDesktopBridge = (
   autosave: (project: ScriptProject) =>
     invoke<{ ok: boolean; error?: string }>('project_autosave', { project }),
   readAutosave: () => invoke('project_read_autosave'),
+  readRecentProjectSnapshots: () =>
+    invoke<Record<string, ScriptProject>>('project_read_recent_snapshots'),
+  writeRecentProjectSnapshot: (project) =>
+    invoke<OperationResult>('project_write_recent_snapshot', { project }),
   saveProject: (project, title) =>
     invoke<OperationResult>('project_save_file', { project, title }),
   saveProjectPath: (filePath, project) =>

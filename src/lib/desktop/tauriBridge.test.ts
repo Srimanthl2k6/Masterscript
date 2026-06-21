@@ -18,6 +18,8 @@ describe('createTauriDesktopBridge', () => {
 
     await bridge.autosave(project)
     await bridge.readAutosave()
+    await bridge.readRecentProjectSnapshots()
+    await bridge.writeRecentProjectSnapshot(project)
     await bridge.saveProject(project, 'Draft')
     await bridge.saveProjectPath('draft.msproj.json', project)
     await bridge.openProject()
@@ -33,6 +35,8 @@ describe('createTauriDesktopBridge', () => {
     expect(invoke.mock.calls.map(([command]) => command)).toEqual([
       'project_autosave',
       'project_read_autosave',
+      'project_read_recent_snapshots',
+      'project_write_recent_snapshot',
       'project_save_file',
       'project_save_path',
       'project_open_file',

@@ -92,6 +92,8 @@ export interface DesktopNativeApi {
   isElectron: true
   autosave(project: ScriptProject): Promise<{ ok: boolean; error?: string }>
   readAutosave(): Promise<AutosaveReadResult>
+  readRecentProjectSnapshots?(): Promise<Record<string, ScriptProject>>
+  writeRecentProjectSnapshot?(project: ScriptProject): Promise<OperationResult>
   saveProject(project: ScriptProject, title: string): Promise<OperationResult>
   saveProjectPath(filePath: string, project: ScriptProject): Promise<OperationResult>
   openProject(): Promise<OpenProjectResult>
@@ -121,6 +123,8 @@ export interface DesktopNativeApi {
 
 export interface DesktopBridge extends Omit<DesktopNativeApi, 'isElectron'> {
   runtime: DesktopRuntime
+  readRecentProjectSnapshots(): Promise<Record<string, ScriptProject>>
+  writeRecentProjectSnapshot(project: ScriptProject): Promise<OperationResult>
   exportMigrationManifest(manifest: MigrationManifestV1): Promise<OperationResult>
   getInstallState(): Promise<InstallState>
   setTutorialCompleted(completed: boolean): Promise<void>

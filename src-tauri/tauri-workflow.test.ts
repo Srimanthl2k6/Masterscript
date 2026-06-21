@@ -6,12 +6,30 @@ import { legacySourceVersion } from '../src/lib/desktop/version'
 const require = createRequire(import.meta.url)
 const packageJson = require('../package.json')
 const workflow = readFileSync('.github/workflows/tauri-pass1-proof.yml', 'utf8')
+const releaseWorkflow = readFileSync('.github/workflows/release.yml', 'utf8')
 
-describe('Tauri Pass 1 proof workflow', () => {
+describe('Tauri release workflows', () => {
   it('keeps all migration version declarations synchronized', () => {
     const tauriConfig = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'))
-    expect(legacySourceVersion).toBe(packageJson.version)
+    expect(legacySourceVersion).toBe('0.1.14')
     expect(tauriConfig.version).toBe(packageJson.version)
+  })
+
+  it('publishes signed Tauri artifacts only after verification', () => {
+    expect(releaseWorkflow).toContain('tauri-apps/tauri-action@v0')
+    expect(releaseWorkflow).toContain('TAURI_SIGNING_PRIVATE_KEY')
+    expect(releaseWorkflow).toContain('latest.json')
+    expect(releaseWorkflow).toContain('latest.yml')
+    expect(releaseWorkflow).toContain('latest-mac.yml')
+    expect(releaseWorkflow).toContain('latest-linux.yml')
+    expect(releaseWorkflow).toContain('releaseDraft: true')
+    expect(releaseWorkflow).toContain('needs: publish-tauri')
+    expect(releaseWorkflow).toContain('--draft=false')
+    expect(releaseWorkflow).toContain('universal-apple-darwin')
+    expect(releaseWorkflow).toContain('appimage,deb,rpm')
+    expect(releaseWorkflow).toContain('pkg.tar.zst')
+    expect(releaseWorkflow).toContain('benchmark:tauri')
+    expect(releaseWorkflow).not.toContain('electron-builder')
   })
 
   it('builds internal artifacts on Windows, macOS, and Linux without publishing', () => {

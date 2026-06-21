@@ -1,4 +1,4 @@
-name: Release
+name: Tauri Desktop Release
 
 on:
   push:
@@ -9,30 +9,47 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build ${{ matrix.platform }}
+  publish-tauri:
+    name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: windows
+          - name: Windows x64
+            id: windows
             os: windows-latest
-            command: npx electron-builder --win nsis --x64 --publish always
-          - platform: macos
+            args: --bundles nsis
+          - name: macOS universal
+            id: macos
             os: macos-latest
-            command: npx electron-builder --mac dmg zip --universal --publish always
-          - platform: linux
-            os: ubuntu-latest
-            command: npx electron-builder --linux AppImage deb rpm pacman --x64 --publish always
-
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+            args: --target universal-apple-darwin --bundles app,dmg
+          - name: Linux x64
+            id: linux
+            os: ubuntu-22.04
+            args: --bundles appimage,deb,rpm
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Install Linux Tauri prerequisites
+        if: matrix.id == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            rpm \
+            wget \
+            zstd
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -40,69 +57,253 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Install Linux packaging dependencies
-        if: matrix.platform == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y fakeroot rpm libarchive-tools
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+          targets: ${{ matrix.id == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Install dependencies
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install JavaScript dependencies
         run: npm ci
 
-      - name: Prepare Windows code signing helper cache
-        if: matrix.platform == 'windows'
+      - name: Verify release source
+        run: |
+          node -e "if ('v' + require('./package.json').version !== process.env.GITHUB_REF_NAME) throw new Error('Git tag and package version differ')"
+          npm test
+          npm run lint
+          npm run build:web
+          cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+          cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build signed Tauri artifacts into a draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ matrix.id == 'macos' && '-' || '' }}
+        with:
+          tagName: v__VERSION__
+          releaseName: MasterScript v__VERSION__
+          releaseBody: |
+            MasterScript now uses Tauri 2 and Rust with the existing React/CSS interface.
+            Existing Electron installations are migrated automatically.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+      - name: Upload legacy-compatible Windows download name
+        if: matrix.id == 'windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $source = Get-ChildItem 'src-tauri\target\release\bundle\nsis\*.exe' | Select-Object -First 1
+          $target = "MasterScript.Setup.$version.exe"
+          Copy-Item -LiteralPath $source.FullName -Destination $target
+          $bytes = [IO.File]::ReadAllBytes((Resolve-Path $target))
+          $sha512 = [Convert]::ToBase64String(
+            [Security.Cryptography.SHA512]::Create().ComputeHash($bytes)
+          )
+          $releaseDate = [DateTime]::UtcNow.ToString('o')
+          @"
+          version: $version
+          files:
+            - url: $target
+              sha512: $sha512
+              size: $($bytes.Length)
+          path: $target
+          sha512: $sha512
+          releaseDate: '$releaseDate'
+          "@ | Set-Content -LiteralPath latest.yml
+          gh release upload "v$version" $target latest.yml --clobber
+
+      - name: Upload macOS ZIP and legacy-compatible DMG name
+        if: matrix.id == 'macos'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          APP_PATH="$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' -print -quit)"
+          DMG_PATH="$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "MasterScript.mac.$VERSION.universal.zip"
+          cp "$DMG_PATH" "MasterScript.mac.$VERSION.universal.dmg"
+          ZIP_NAME="MasterScript.mac.$VERSION.universal.zip"
+          SHA512="$(openssl dgst -sha512 -binary "$ZIP_NAME" | base64 | tr -d '\n')"
+          SIZE="$(stat -f%z "$ZIP_NAME")"
+          cat > latest-mac.yml <<EOF
+          version: $VERSION
+          files:
+            - url: $ZIP_NAME
+              sha512: $SHA512
+              size: $SIZE
+          path: $ZIP_NAME
+          sha512: $SHA512
+          releaseDate: '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+          EOF
+          gh release upload "v$VERSION" \
+            "MasterScript.mac.$VERSION.universal.zip" \
+            "MasterScript.mac.$VERSION.universal.dmg" \
+            latest-mac.yml \
+            --clobber
+
+      - name: Upload Pacman package and legacy-compatible Linux names
+        if: matrix.id == 'linux'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          PACKAGE_ROOT="$RUNNER_TEMP/masterscript-pacman"
+          mkdir -p "$PACKAGE_ROOT/usr/bin" "$PACKAGE_ROOT/usr/share/applications"
+          install -m755 src-tauri/target/release/masterscript "$PACKAGE_ROOT/usr/bin/masterscript"
+          install -Dm644 src-tauri/icons/128x128.png \
+            "$PACKAGE_ROOT/usr/share/icons/hicolor/128x128/apps/masterscript.png"
+          cat > "$PACKAGE_ROOT/usr/share/applications/masterscript.desktop" <<EOF
+          [Desktop Entry]
+          Name=MasterScript
+          Comment=Desktop screenwriting suite
+          Exec=masterscript
+          Icon=masterscript
+          Terminal=false
+          Type=Application
+          Categories=Office;
+          EOF
+          cat > "$PACKAGE_ROOT/.PKGINFO" <<EOF
+          pkgname = masterscript
+          pkgbase = masterscript
+          pkgver = $VERSION-1
+          pkgdesc = Desktop screenwriting suite
+          url = https://github.com/Srimanthl2k6/Masterscript
+          builddate = $(date +%s)
+          packager = MasterScript
+          size = $(stat -c%s "$PACKAGE_ROOT/usr/bin/masterscript")
+          arch = x86_64
+          license = custom
+          depend = webkit2gtk-4.1
+          EOF
+          tar --zstd -cf "MasterScript.linux.$VERSION.x86_64.pkg.tar.zst" -C "$PACKAGE_ROOT" .
+          APPIMAGE="$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)"
+          cp "$APPIMAGE" "MasterScript.linux.$VERSION.x86_64.AppImage"
+          APPIMAGE_NAME="MasterScript.linux.$VERSION.x86_64.AppImage"
+          SHA512="$(openssl dgst -sha512 -binary "$APPIMAGE_NAME" | base64 -w0)"
+          SIZE="$(stat -c%s "$APPIMAGE_NAME")"
+          cat > latest-linux.yml <<EOF
+          version: $VERSION
+          files:
+            - url: $APPIMAGE_NAME
+              sha512: $SHA512
+              size: $SIZE
+          path: $APPIMAGE_NAME
+          sha512: $SHA512
+          releaseDate: '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+          EOF
+          gh release upload "v$VERSION" \
+            "MasterScript.linux.$VERSION.x86_64.pkg.tar.zst" \
+            "MasterScript.linux.$VERSION.x86_64.AppImage" \
+            latest-linux.yml \
+            --clobber
+
+      - name: Run Windows RAM and installed-footprint release gates
+        if: matrix.id == 'windows'
         shell: pwsh
         run: |
-          $cacheRoot = Join-Path $env:LOCALAPPDATA 'electron-builder\Cache\winCodeSign'
-          $target = Join-Path $cacheRoot 'winCodeSign-2.6.0'
-          if (Test-Path (Join-Path $target 'rcedit-x64.exe')) {
-            exit 0
+          $executable = (Resolve-Path 'src-tauri\target\release\masterscript.exe').Path
+          $installer = (Get-ChildItem 'src-tauri\target\release\bundle\nsis\*.exe' | Select-Object -First 1).FullName
+          npm run benchmark:tauri -- "--executable=$executable" "--installer=$installer"
+
+      - name: Upload performance evidence
+        if: matrix.id == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-pass8-performance
+          path: analysis/tauri-pass8/tauri-runtime-result.json
+          if-no-files-found: error
+
+  publish-release:
+    name: Verify artifacts and publish
+    runs-on: ubuntu-latest
+    needs: publish-tauri
+    steps:
+      - name: Build deterministic cross-platform updater manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir updater-assets
+          gh release download "$TAG" --repo "$REPOSITORY" --dir updater-assets
+          WIN_SIG_FILE="$(find updater-assets -maxdepth 1 -name '*.exe.sig' -print -quit)"
+          MAC_SIG_FILE="$(find updater-assets -maxdepth 1 -name '*.app.tar.gz.sig' -print -quit)"
+          LINUX_SIG_FILE="$(find updater-assets -maxdepth 1 -name '*.AppImage.sig' -print -quit)"
+          test -n "$WIN_SIG_FILE"
+          test -n "$MAC_SIG_FILE"
+          test -n "$LINUX_SIG_FILE"
+          export VERSION="${TAG#v}"
+          export WIN_SIGNATURE="$(cat "$WIN_SIG_FILE")"
+          export MAC_SIGNATURE="$(cat "$MAC_SIG_FILE")"
+          export LINUX_SIGNATURE="$(cat "$LINUX_SIG_FILE")"
+          export MAC_ASSET="$(basename "${MAC_SIG_FILE%.sig}")"
+          node <<'NODE'
+          const fs = require('node:fs')
+          const base = `https://github.com/${process.env.REPOSITORY}/releases/download/${process.env.TAG}`
+          const version = process.env.VERSION
+          const manifest = {
+            version,
+            notes: 'MasterScript Tauri 2 desktop release',
+            pub_date: new Date().toISOString(),
+            platforms: {
+              'windows-x86_64': {
+                signature: process.env.WIN_SIGNATURE,
+                url: `${base}/MasterScript.Setup.${version}.exe`,
+              },
+              'linux-x86_64': {
+                signature: process.env.LINUX_SIGNATURE,
+                url: `${base}/MasterScript.linux.${version}.x86_64.AppImage`,
+              },
+              'darwin-x86_64': {
+                signature: process.env.MAC_SIGNATURE,
+                url: `${base}/${process.env.MAC_ASSET}`,
+              },
+              'darwin-aarch64': {
+                signature: process.env.MAC_SIGNATURE,
+                url: `${base}/${process.env.MAC_ASSET}`,
+              },
+            },
           }
+          fs.writeFileSync('latest.json', `${JSON.stringify(manifest, null, 2)}\n`)
+          NODE
+          gh release upload "$TAG" latest.json --repo "$REPOSITORY" --clobber
 
-          New-Item -ItemType Directory -Force -Path $cacheRoot | Out-Null
-          $archive = Join-Path $cacheRoot 'winCodeSign-2.6.0.7z'
-          $extract = Join-Path $cacheRoot 'winCodeSign-2.6.0-extract'
-          Invoke-WebRequest `
-            -Uri 'https://github.com/electron-userland/electron-builder-binaries/releases/download/winCodeSign-2.6.0/winCodeSign-2.6.0.7z' `
-            -OutFile $archive
+      - name: Verify required release artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ASSETS="$(gh release view "$TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name')"
+          for required in \
+            latest.json \
+            latest.yml \
+            latest-mac.yml \
+            latest-linux.yml \
+            "MasterScript.Setup.${TAG#v}.exe" \
+            "MasterScript.mac.${TAG#v}.universal.dmg" \
+            "MasterScript.mac.${TAG#v}.universal.zip" \
+            "MasterScript.linux.${TAG#v}.x86_64.AppImage" \
+            "MasterScript.linux.${TAG#v}.x86_64.pkg.tar.zst"
+          do
+            echo "$ASSETS" | grep -Fx "$required"
+          done
 
-          if (Test-Path $extract) {
-            Remove-Item -LiteralPath $extract -Recurse -Force
-          }
-          New-Item -ItemType Directory -Force -Path $extract | Out-Null
-
-          $sevenZip = Join-Path $PWD 'node_modules\7zip-bin\win\x64\7za.exe'
-          & $sevenZip x -snld -bd $archive "-o$extract"
-          $extractExitCode = $LASTEXITCODE
-          if (-not (Test-Path (Join-Path $extract 'rcedit-x64.exe'))) {
-            exit $extractExitCode
-          }
-
-          $darwinLib = Join-Path $extract 'darwin\10.12\lib'
-          function Repair-SymlinkPlaceholder($linkPath, $targetPath) {
-            $item = Get-Item -LiteralPath $linkPath -ErrorAction SilentlyContinue
-            if (($null -eq $item) -or (($null -eq $item.LinkType) -and ($item.Length -eq 0))) {
-              Copy-Item -LiteralPath $targetPath -Destination $linkPath -Force
-            }
-          }
-
-          Repair-SymlinkPlaceholder `
-            -linkPath (Join-Path $darwinLib 'libcrypto.dylib') `
-            -targetPath (Join-Path $darwinLib 'libcrypto.1.0.0.dylib')
-          Repair-SymlinkPlaceholder `
-            -linkPath (Join-Path $darwinLib 'libssl.dylib') `
-            -targetPath (Join-Path $darwinLib 'libssl.1.0.0.dylib')
-
-          if (Test-Path $target) {
-            Remove-Item -LiteralPath $target -Recurse -Force
-          }
-          Move-Item -LiteralPath $extract -Destination $target
-
-      - name: Run tests
-        run: npm test
-
-      - name: Build renderer
-        run: npm run build:web
-
-      - name: Build and publish desktop artifacts
-        run: ${{ matrix.command }}
+      - name: Publish verified Tauri release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: gh release edit "$TAG" --repo "$REPOSITORY" --draft=false

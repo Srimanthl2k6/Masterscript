@@ -10,6 +10,10 @@ import {
   createTauriDesktopBridge,
   type TauriInvoker,
 } from './tauriBridge'
+import {
+  recentProjectSnapshotsKey,
+  tutorialCompletedKey,
+} from './storageKeys'
 
 const unavailableMessage = 'This operation is available only in the desktop app.'
 
@@ -18,10 +22,65 @@ const unavailable = async (): Promise<OperationResult> => ({
   error: unavailableMessage,
 })
 
+const readBrowserRecentProjectSnapshots = (): Record<string, ScriptProject> => {
+  try {
+    const raw = globalThis.localStorage?.getItem(recentProjectSnapshotsKey)
+    return raw ? (JSON.parse(raw) as Record<string, ScriptProject>) : {}
+  } catch {
+    return {}
+  }
+}
+
+const writeBrowserRecentProjectSnapshot = (
+  project: ScriptProject,
+): OperationResult => {
+  try {
+    const snapshots = readBrowserRecentProjectSnapshots()
+    const entries = Object.entries({ ...snapshots, [project.id]: project })
+      .sort(
+        ([, left], [, right]) =>
+          Date.parse(right.meta.updatedAt) - Date.parse(left.meta.updatedAt),
+      )
+      .slice(0, 12)
+    globalThis.localStorage?.setItem(
+      recentProjectSnapshotsKey,
+      JSON.stringify(Object.fromEntries(entries)),
+    )
+    return { ok: true }
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Snapshot persistence failed',
+    }
+  }
+}
+
+const getBrowserInstallState = (): InstallState => {
+  try {
+    if (globalThis.localStorage?.getItem(tutorialCompletedKey) === '1') {
+      return {
+        kind: 'existing-tauri',
+        tutorialCompleted: true,
+        migrationVersion: null,
+      }
+    }
+  } catch {
+    // Treat unavailable browser storage as a fresh transient session.
+  }
+  return {
+    kind: 'fresh',
+    tutorialCompleted: false,
+    migrationVersion: null,
+  }
+}
+
 const createNonElectronBridge = (runtime: 'web' | 'tauri'): DesktopBridge => ({
   runtime,
   autosave: async () => ({ ok: true }),
   readAutosave: async () => ({ ok: true, project: null }),
+  readRecentProjectSnapshots: async () => readBrowserRecentProjectSnapshots(),
+  writeRecentProjectSnapshot: async (project) =>
+    writeBrowserRecentProjectSnapshot(project),
   saveProject: unavailable,
   saveProjectPath: unavailable,
   openProject: unavailable,
@@ -42,18 +101,20 @@ const createNonElectronBridge = (runtime: 'web' | 'tauri'): DesktopBridge => ({
     error: unavailableMessage,
   }),
   exportMigrationManifest: unavailable,
-  getInstallState: async (): Promise<InstallState> => ({
-    kind: 'fresh',
-    tutorialCompleted: false,
-    migrationVersion: null,
-  }),
-  setTutorialCompleted: async () => undefined,
+  getInstallState: async (): Promise<InstallState> => getBrowserInstallState(),
+  setTutorialCompleted: async (completed) => {
+    try {
+      if (completed) {
+        globalThis.localStorage?.setItem(tutorialCompletedKey, '1')
+      } else {
+        globalThis.localStorage?.removeItem(tutorialCompletedKey)
+      }
+    } catch {
+      // Tutorial state remains in memory for this session.
+    }
+  },
   bootstrapInstallation: async () => ({
-    installState: {
-      kind: 'fresh',
-      tutorialCompleted: false,
-      migrationVersion: null,
-    },
+    installState: getBrowserInstallState(),
     migrationManifest: null,
   }),
 })
@@ -62,6 +123,12 @@ const createElectronBridge = (api: DesktopNativeApi): DesktopBridge => ({
   runtime: 'electron',
   autosave: (project) => api.autosave(project),
   readAutosave: () => api.readAutosave(),
+  readRecentProjectSnapshots: () =>
+    api.readRecentProjectSnapshots?.() ??
+    Promise.resolve(readBrowserRecentProjectSnapshots()),
+  writeRecentProjectSnapshot: (project) =>
+    api.writeRecentProjectSnapshot?.(project) ??
+    Promise.resolve(writeBrowserRecentProjectSnapshot(project)),
   saveProject: (project, title) => api.saveProject(project, title),
   saveProjectPath: (filePath, project) => api.saveProjectPath(filePath, project),
   openProject: () => api.openProject(),

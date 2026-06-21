@@ -11,6 +11,7 @@ const INSTALL_STATE_FILE: &str = "install-state-v1.json";
 const MIGRATION_MANIFEST_FILE: &str = "migration-manifest-v1.json";
 const IMPORTED_MANIFEST_FILE: &str = "imported-migration-manifest-v1.json";
 const AUTOSAVE_FILE: &str = "autosave.msproj.json";
+const RECENT_PROJECT_SNAPSHOTS_FILE: &str = "recent-project-snapshots-v1.json";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -97,6 +98,19 @@ fn copy_valid_autosave_once(
     }
 }
 
+fn import_recent_project_snapshots_once(
+    app_directory: &Path,
+    manifest: Option<&MigrationManifestV1>,
+) {
+    let target = app_directory.join(RECENT_PROJECT_SNAPSHOTS_FILE);
+    if target.exists() {
+        return;
+    }
+    if let Some(snapshots) = manifest.map(|value| &value.recent_project_snapshots) {
+        let _ = write_json_atomic(&target, snapshots);
+    }
+}
+
 fn existing_installation(
     install_state_path: &Path,
     imported_manifest_path: &Path,
@@ -140,6 +154,7 @@ pub fn bootstrap(app: &tauri::AppHandle) -> io::Result<BootstrapInstallationResu
             write_json_atomic(&imported_manifest_path, value)?;
         }
         copy_valid_autosave_once(&app_directory, evidence_directory, manifest.as_ref());
+        import_recent_project_snapshots_once(&app_directory, manifest.as_ref());
     }
 
     let install_state = legacy::classify(legacy_evidence_exists, false, None);

@@ -11,6 +11,7 @@ export type WorkspaceFileMenuItemId =
   | 'print-preview'
   | 'theme'
   | 'snapshots'
+  | 'tutorial'
   | 'undo'
   | 'redo'
 
@@ -60,6 +61,7 @@ export const workspaceFileMenuGroups: WorkspaceFileMenuGroup[] = [
     items: [
       { id: 'theme', label: 'Theme' },
       { id: 'snapshots', label: 'Snapshots' },
+      { id: 'tutorial', label: 'Tutorial' },
     ],
   },
   {

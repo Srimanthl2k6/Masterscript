@@ -7,7 +7,6 @@ import {
 } from './desktopBootstrap'
 import {
   hostedLanRoomsKey,
-  recentProjectSnapshotsKey,
   recentProjectsKey,
   themeKey,
 } from './storageKeys'
@@ -58,9 +57,6 @@ describe('desktop bootstrap migration', () => {
     expect(JSON.parse(storage.getItem(recentProjectsKey) ?? '[]')).toEqual(
       manifest.recentProjects,
     )
-    expect(
-      JSON.parse(storage.getItem(recentProjectSnapshotsKey) ?? '{}'),
-    ).toEqual(manifest.recentProjectSnapshots)
     expect(JSON.parse(storage.getItem(hostedLanRoomsKey) ?? '[]')).toEqual([
       'room-a',
     ])
