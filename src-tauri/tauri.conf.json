@@ -29,8 +29,8 @@
     "category": "Productivity",
     "shortDescription": "MasterScript desktop screenwriting suite",
     "icon": [
-      "../icon.png",
-      "../icon.ico"
+      "../build/icon.png",
+      "../build/icon.ico"
     ],
     "windows": {
       "webviewInstallMode": {

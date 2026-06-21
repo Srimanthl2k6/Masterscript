@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const tauriConfig = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'))
@@ -23,6 +23,16 @@ describe('Pass 1 Tauri shell', () => {
       minWidth: 1100,
       minHeight: 700,
     })
+  })
+
+  it('references icon assets that are tracked in the repository', () => {
+    expect(tauriConfig.bundle.icon).toEqual([
+      '../build/icon.png',
+      '../build/icon.ico',
+    ])
+    for (const iconPath of tauriConfig.bundle.icon) {
+      expect(existsSync(`src-tauri/${iconPath}`)).toBe(true)
+    }
   })
 
   it('uses Tauri 2 and exposes only Pass 1 compatibility commands', () => {
