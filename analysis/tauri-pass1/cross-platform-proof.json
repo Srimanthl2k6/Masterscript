@@ -1,0 +1,35 @@
+{
+  "runId": 27904587034,
+  "runUrl": "https://github.com/Srimanthl2k6/Masterscript/actions/runs/27904587034",
+  "headSha": "b6707ebfbc17f9bfcf7442ace9c7fdf167d954aa",
+  "createdAt": "2026-06-21T12:38:48Z",
+  "completedAt": "2026-06-21T12:50:09Z",
+  "conclusion": "success",
+  "platforms": {
+    "windows": {
+      "jobId": 82570818233,
+      "rustTests": "passed",
+      "installer": "NSIS",
+      "electronReplacementSmokeTest": "passed",
+      "legacyDataPreservation": "passed",
+      "artifactArchiveBytes": 2396998
+    },
+    "macos": {
+      "jobId": 82570818256,
+      "rustTests": "passed",
+      "installer": "DMG",
+      "electronReplacementSmokeTest": "passed",
+      "legacyDataPreservation": "passed",
+      "artifactArchiveBytes": 4735333
+    },
+    "linux": {
+      "jobId": 82570818230,
+      "rustTests": "passed",
+      "installer": "DEB",
+      "electronReplacementSmokeTest": "passed",
+      "legacyDataPreservation": "passed",
+      "artifactArchiveBytes": 10420975
+    }
+  },
+  "publication": "internal workflow artifacts only"
+}

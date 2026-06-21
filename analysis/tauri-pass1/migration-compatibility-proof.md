@@ -45,10 +45,12 @@ The non-release CI workflow builds an internal Tauri installer on all target ope
 
 Artifacts are uploaded only to the workflow run. There is no release or updater publication path in this workflow.
 
+The authoritative run completed successfully on June 21, 2026: [Tauri Pass 1 Compatibility Proof run 27904587034](https://github.com/Srimanthl2k6/Masterscript/actions/runs/27904587034). All three jobs passed Rust tests, built their internal installer, replaced the Electron application/package in the smoke environment, and retained the seeded legacy-data sentinel.
+
 The public Electron updater remains unchanged. Public cutover is prohibited until Pass 8 because signing, universal macOS output, complete Rust feature parity, and updater metadata are not part of the Pass 1 shell.
 
 ## Local prerequisite result
 
 Rust 1.96.0 and Cargo 1.96.0 are installed. Local Windows Rust linking is blocked because the Microsoft C++ Build Tools/Windows SDK linker (`link.exe`) is absent. TypeScript tests, frontend builds, and configuration tests run locally; authoritative Rust builds and installer tests run on GitHub-hosted Windows, macOS, and Linux workers with the required toolchains.
 
-This is an environment prerequisite, not a source-code bypass. A failed platform CI job blocks Pass 1 completion and therefore blocks permission to begin Pass 2.
+This is an environment prerequisite, not a source-code bypass. The authoritative hosted CI jobs passed on Windows, macOS, and Linux.
