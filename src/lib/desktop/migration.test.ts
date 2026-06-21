@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createEmptyProject } from '../screenplay'
 import {
   hostedLanRoomsKey,
@@ -7,6 +7,10 @@ import {
   themeKey,
 } from './storageKeys'
 import { buildMigrationManifestV1 } from './migration'
+import {
+  legacyMigrationStateChangedEvent,
+  notifyLegacyMigrationStateChanged,
+} from './storageKeys'
 
 class MemoryStorage implements Pick<Storage, 'getItem'> {
   private readonly values: Record<string, string>
@@ -78,5 +82,18 @@ describe('buildMigrationManifestV1', () => {
     expect(manifest.recentProjects).toEqual([])
     expect(manifest.recentProjectSnapshots).toEqual({})
     expect(manifest.hostedLanRooms).toEqual(['valid'])
+  })
+
+  it('emits a renderer event when migration-owned storage changes', () => {
+    const dispatchEvent = vi.fn()
+    vi.stubGlobal('window', { dispatchEvent })
+
+    notifyLegacyMigrationStateChanged()
+
+    expect(dispatchEvent).toHaveBeenCalledOnce()
+    expect(dispatchEvent.mock.calls[0][0].type).toBe(
+      legacyMigrationStateChangedEvent,
+    )
+    vi.unstubAllGlobals()
   })
 })

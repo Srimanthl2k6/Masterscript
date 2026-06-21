@@ -1,6 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 
+const require = createRequire(import.meta.url)
+const packageJson = require('../package.json')
 const tauriConfig = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'))
 const cargoManifest = readFileSync('src-tauri/Cargo.toml', 'utf8')
 const rustLibrary = readFileSync('src-tauri/src/lib.rs', 'utf8')
@@ -8,7 +11,7 @@ const rustLibrary = readFileSync('src-tauri/src/lib.rs', 'utf8')
 describe('Pass 1 Tauri shell', () => {
   it('reuses the unchanged Vite frontend and desktop identity', () => {
     expect(tauriConfig.productName).toBe('MasterScript')
-    expect(tauriConfig.version).toBe('0.1.13')
+    expect(tauriConfig.version).toBe(packageJson.version)
     expect(tauriConfig.identifier).toBe('com.masterscript.desktop')
     expect(tauriConfig.build.frontendDist).toBe('../dist')
     expect(tauriConfig.build.devUrl).toBe('http://localhost:5173')

@@ -19,6 +19,8 @@ import { buildMigrationManifestV1 } from './lib/desktop/migration'
 import {
   autosaveKey,
   hostedLanRoomsKey,
+  legacyMigrationStateChangedEvent,
+  notifyLegacyMigrationStateChanged,
   recentProjectSnapshotsKey,
   recentProjectsKey,
   themeKey,
@@ -444,6 +446,7 @@ const rememberHostedLanRoom = (roomId: string) => {
     const rooms = readHostedLanRoomIds()
     rooms.add(roomId)
     localStorage.setItem(hostedLanRoomsKey, JSON.stringify([...rooms]))
+    notifyLegacyMigrationStateChanged()
   } catch {
     // Local host ownership only affects auto-reconnect convenience.
   }
@@ -496,6 +499,7 @@ const writeRecentProjectSnapshot = (project: ScriptProject) => {
       recentProjectSnapshotsKey,
       JSON.stringify(Object.fromEntries(nextEntries)),
     )
+    notifyLegacyMigrationStateChanged()
   } catch {
     // Ignore snapshot persistence failures; autosave still covers the current project.
   }
@@ -2064,6 +2068,7 @@ function App() {
     document.documentElement.dataset.theme = themeMode
     try {
       localStorage.setItem(themeKey, themeMode)
+      notifyLegacyMigrationStateChanged()
     } catch {
       // Ignore persistence errors and keep in-memory theme preference.
     }
@@ -2072,6 +2077,7 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem(recentProjectsKey, JSON.stringify(recentProjects))
+      notifyLegacyMigrationStateChanged()
     } catch {
       // Ignore recent project persistence failures.
     }
@@ -2082,19 +2088,27 @@ function App() {
       return
     }
 
-    const timer = window.setTimeout(() => {
-      const manifest = buildMigrationManifestV1({
-        storage: localStorage,
-        sourceVersion: legacySourceVersion,
-        autosavePath: null,
-      })
-      void desktopBridge.exportMigrationManifest(manifest)
-    }, 0)
+    let timer = 0
+    const scheduleExport = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        const manifest = buildMigrationManifestV1({
+          storage: localStorage,
+          sourceVersion: legacySourceVersion,
+          autosavePath: null,
+        })
+        void desktopBridge.exportMigrationManifest(manifest)
+      }, 50)
+    }
+
+    window.addEventListener(legacyMigrationStateChangedEvent, scheduleExport)
+    scheduleExport()
 
     return () => {
       window.clearTimeout(timer)
+      window.removeEventListener(legacyMigrationStateChangedEvent, scheduleExport)
     }
-  }, [recentProjects, themeMode])
+  }, [])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

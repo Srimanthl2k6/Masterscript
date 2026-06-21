@@ -1,6 +1,6 @@
 [package]
 name = "masterscript"
-version = "0.1.13"
+version = "0.1.14"
 description = "MasterScript Tauri 2 compatibility shell"
 authors = ["Srimanthl2k6"]
 license = "UNLICENSED"

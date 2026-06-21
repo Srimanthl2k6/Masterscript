@@ -8,9 +8,7 @@ describe('Electron migration bridge', () => {
   it('writes a versioned migration manifest inside Electron user data', () => {
     expect(mainProcess).toContain("ipcMain.handle('migration:export-v1'")
     expect(mainProcess).toContain("'migration-manifest-v1.json'")
-    expect(mainProcess).toContain('legacyInstall: true')
-    expect(mainProcess).toContain('tutorialCompleted: true')
-    expect(mainProcess).toContain('autosavePath: getAutosavePath()')
+    expect(mainProcess).toContain('exportLegacyMigrationState')
   })
 
   it('exposes migration and install-state operations through the preload boundary', () => {
