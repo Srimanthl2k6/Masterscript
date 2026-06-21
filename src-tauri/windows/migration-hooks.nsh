@@ -9,4 +9,6 @@
 
 !macro NSIS_HOOK_POSTINSTALL
   RMDir /r "$LOCALAPPDATA\Programs\MasterScript"
+  CreateShortCut "$SMPROGRAMS\MasterScript.lnk" "$INSTDIR\masterscript.exe"
+  CreateShortCut "$DESKTOP\MasterScript.lnk" "$INSTDIR\masterscript.exe"
 !macroend

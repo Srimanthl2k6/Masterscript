@@ -7,6 +7,10 @@ const packageJson = require('../package.json')
 const tauriConfig = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'))
 const cargoManifest = readFileSync('src-tauri/Cargo.toml', 'utf8')
 const rustLibrary = readFileSync('src-tauri/src/lib.rs', 'utf8')
+const installerHooks = readFileSync(
+  'src-tauri/windows/migration-hooks.nsh',
+  'utf8',
+)
 
 describe('Pass 1 Tauri shell', () => {
   it('reuses the unchanged Vite frontend and desktop identity', () => {
@@ -47,6 +51,12 @@ describe('Pass 1 Tauri shell', () => {
     for (const iconPath of tauriConfig.bundle.icon) {
       expect(existsSync(`src-tauri/${iconPath}`)).toBe(true)
     }
+  })
+
+  it('repairs Windows desktop and Start Menu shortcuts after installation', () => {
+    expect(installerHooks).toContain('$SMPROGRAMS\\MasterScript.lnk')
+    expect(installerHooks).toContain('$DESKTOP\\MasterScript.lnk')
+    expect(installerHooks.match(/CreateShortCut/g)).toHaveLength(2)
   })
 
   it('uses Tauri 2 and exposes the complete desktop command surface', () => {

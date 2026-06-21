@@ -8,7 +8,7 @@ import {
 describe('download links', () => {
   it('points users to the published Windows installer release asset', () => {
     expect(MASTER_SCRIPT_DOWNLOAD_URL).toBe(
-      'https://github.com/Srimanthl2k6/Masterscript/releases/download/v0.2.0/MasterScript.Setup.0.2.0.exe',
+      'https://github.com/Srimanthl2k6/Masterscript/releases/latest/download/MasterScript.Setup.exe',
     )
   })
 
@@ -16,15 +16,15 @@ describe('download links', () => {
     expect(DESKTOP_DOWNLOAD_LINKS).toEqual([
       {
         label: 'Windows',
-        url: 'https://github.com/Srimanthl2k6/Masterscript/releases/download/v0.2.0/MasterScript.Setup.0.2.0.exe',
+        url: 'https://github.com/Srimanthl2k6/Masterscript/releases/latest/download/MasterScript.Setup.exe',
       },
       {
         label: 'macOS',
-        url: 'https://github.com/Srimanthl2k6/Masterscript/releases/download/v0.2.0/MasterScript.mac.0.2.0.universal.dmg',
+        url: 'https://github.com/Srimanthl2k6/Masterscript/releases/latest/download/MasterScript.mac.universal.dmg',
       },
       {
         label: 'Linux AppImage',
-        url: 'https://github.com/Srimanthl2k6/Masterscript/releases/download/v0.2.0/MasterScript.linux.0.2.0.x86_64.AppImage',
+        url: 'https://github.com/Srimanthl2k6/Masterscript/releases/latest/download/MasterScript.linux.x86_64.AppImage',
       },
     ])
   })
