@@ -16,6 +16,7 @@ import {
 import { DESKTOP_DOWNLOAD_LINKS, shouldShowDownloadButton } from './lib/download'
 import { desktopBridge } from './lib/desktop/desktopBridge'
 import { buildMigrationManifestV1 } from './lib/desktop/migration'
+import { isLikelyLocalProjectPath } from './lib/desktop/projectPath'
 import {
   autosaveKey,
   hostedLanRoomsKey,
@@ -426,10 +427,6 @@ const shortcutFromKeyEvent = (
     .filter(Boolean)
     .join('+')
 }
-
-const isLikelyLocalProjectPath = (value: string): boolean =>
-  (/^[a-z]:[\\/]/i.test(value) || value.startsWith('\\\\')) &&
-  /\.msproj\.json$/i.test(value)
 
 const readHostedLanRoomIds = (): Set<string> => {
   try {
@@ -1766,7 +1763,7 @@ function App() {
   })
 
   const persistProjectImmediately = useCallback(async (targetProject: ScriptProject) => {
-    if (desktopBridge.runtime === 'electron') {
+    if (desktopBridge.runtime !== 'web') {
       await desktopBridge.autosave(targetProject)
     } else {
       localStorage.setItem(autosaveKey, JSON.stringify(targetProject))
@@ -1777,7 +1774,7 @@ function App() {
   const persistProjectToKnownPath = useCallback(
     async (targetProject: ScriptProject, explicitPath = savedPath) => {
       if (
-        desktopBridge.runtime !== 'electron' ||
+        desktopBridge.runtime === 'web' ||
         !isLikelyLocalProjectPath(explicitPath)
       ) {
         return
@@ -2024,7 +2021,7 @@ function App() {
 
     const restoreAutosave = async () => {
       try {
-        if (desktopBridge.runtime === 'electron') {
+        if (desktopBridge.runtime !== 'web') {
           const result = await desktopBridge.readAutosave()
           if (active && result.ok && result.project) {
             const recovered = hydrateProject(result.project)
@@ -2115,7 +2112,7 @@ function App() {
       const persist = async () => {
         try {
           setAutosaveState('saving')
-          if (desktopBridge.runtime === 'electron') {
+          if (desktopBridge.runtime !== 'web') {
             await desktopBridge.autosave(project)
             if (
               isLikelyLocalProjectPath(savedPath)
@@ -2833,7 +2830,7 @@ function App() {
   const saveProject = async () => {
     const serialized = JSON.stringify(project, null, 2)
 
-    if (desktopBridge.runtime === 'electron') {
+    if (desktopBridge.runtime !== 'web') {
       const result = await desktopBridge.saveProject(project, project.meta.title)
       if (result.ok) {
         setSavedPath(result.path ?? 'Saved with desktop file picker')
@@ -2857,7 +2854,7 @@ function App() {
   }
 
   const openProject = async () => {
-    if (desktopBridge.runtime === 'electron') {
+    if (desktopBridge.runtime !== 'web') {
       const result = await desktopBridge.openProject()
       if (result.ok && result.project) {
         const loadedProject = hydrateProject(result.project)
@@ -2880,7 +2877,7 @@ function App() {
 
   const openAutosavedRecentFallback = async (entry: RecentProjectEntry) => {
     try {
-      if (desktopBridge.runtime === 'electron') {
+      if (desktopBridge.runtime !== 'web') {
         const result = await desktopBridge.readAutosave()
         if (result.ok && result.project) {
           const recovered = hydrateProject(result.project)
@@ -2945,7 +2942,7 @@ function App() {
     }
 
     if (!isLikelyLocalProjectPath(entry.label)) {
-      if (desktopBridge.runtime === 'electron') {
+      if (desktopBridge.runtime !== 'web') {
         setStatusMessage('This recent item was not saved to a project file path yet')
         return
       }
@@ -2955,7 +2952,7 @@ function App() {
       return
     }
 
-    if (desktopBridge.runtime !== 'electron') {
+    if (desktopBridge.runtime === 'web') {
       setStatusMessage('Use Open Project to select this recent file')
       fileInputRef.current?.click()
       return
@@ -3185,7 +3182,7 @@ function App() {
       setCollaborationJoinStatus('Project synced. Choose where to save it.')
 
       let nextSavedPath = `${hydrated.meta.title || 'untitled'}.msproj.json`
-      if (desktopBridge.runtime === 'electron') {
+      if (desktopBridge.runtime !== 'web') {
         const saveResult = await desktopBridge.saveProject(
           hydrated,
           hydrated.meta.title,
@@ -3242,7 +3239,7 @@ function App() {
 
   const exportFountain = async () => {
     const fountain = toFountain(project)
-    if (desktopBridge.runtime === 'electron') {
+    if (desktopBridge.runtime !== 'web') {
       const result = await desktopBridge.exportFountain(
         project.meta.title,
         fountain,
@@ -3304,7 +3301,7 @@ function App() {
     try {
       const { importFountainProject } = await import('./lib/adapters/fountain')
 
-      if (desktopBridge.runtime === 'electron') {
+      if (desktopBridge.runtime !== 'web') {
         const result = await desktopBridge.importFountain()
         if (!result.ok || !result.content) {
           return
@@ -3333,7 +3330,7 @@ function App() {
     try {
       const { importFdxProject } = await import('./lib/adapters/fdx')
 
-      if (desktopBridge.runtime === 'electron') {
+      if (desktopBridge.runtime !== 'web') {
         const result = await desktopBridge.importFdx()
         if (!result.ok || !result.content) {
           return
@@ -3362,7 +3359,7 @@ function App() {
     try {
       const { exportProjectToFdx } = await import('./lib/adapters/fdx')
       const xml = exportProjectToFdx(project)
-      if (desktopBridge.runtime === 'electron') {
+      if (desktopBridge.runtime !== 'web') {
         const result = await desktopBridge.exportFdx(project.meta.title, xml)
         if (result.ok) {
           setStatusMessage('FDX export created')
@@ -3383,7 +3380,7 @@ function App() {
     try {
       const { importDocxProject } = await import('./lib/adapters/docx')
 
-      if (desktopBridge.runtime === 'electron') {
+      if (desktopBridge.runtime !== 'web') {
         const result = await desktopBridge.importDocx()
         if (!result.ok || !result.base64) {
           return
@@ -3413,7 +3410,7 @@ function App() {
       const { exportProjectToDocx } = await import('./lib/adapters/docx')
       const output = await exportProjectToDocx(project)
 
-      if (desktopBridge.runtime === 'electron') {
+      if (desktopBridge.runtime !== 'web') {
         const base64 = arrayBufferToBase64(output)
         const result = await desktopBridge.exportDocx(project.meta.title, base64)
         if (result.ok) {
@@ -3440,7 +3437,7 @@ function App() {
       const { exportProjectToPdf } = await import('./lib/adapters/pdf')
       const output = await exportProjectToPdf(project)
 
-      if (desktopBridge.runtime === 'electron') {
+      if (desktopBridge.runtime !== 'web') {
         const base64 = arrayBufferToBase64(output)
         const result = await desktopBridge.exportPdf(project.meta.title, base64)
         if (result.ok) {
@@ -5365,8 +5362,8 @@ function App() {
     }
   }, [appView])
 
-  const isRunningInElectron = desktopBridge.runtime === 'electron'
-  const showDownloadButton = shouldShowDownloadButton(isRunningInElectron)
+  const isRunningInDesktop = desktopBridge.runtime !== 'web'
+  const showDownloadButton = shouldShowDownloadButton(isRunningInDesktop)
   const rightOutlineTitle = activeTab === 'draft' ? 'Writer Panel' : 'Scene Outlines'
 
   return (

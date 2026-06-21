@@ -200,7 +200,7 @@ export const useCollaborationSession = ({
         await flushAutosave()
       }
       await destroyProvider()
-      if (sessionInfo?.mode === 'lan-host' && desktopBridge.runtime === 'electron') {
+      if (sessionInfo?.mode === 'lan-host' && desktopBridge.runtime !== 'web') {
         await desktopBridge.stopLanCollaboration()
       }
       ydocRef.current?.destroy()
@@ -304,8 +304,8 @@ export const useCollaborationSession = ({
       options: CollaborationStartOptions = {},
     ): Promise<CollaborationStartResult> => {
       void options
-      if (desktopBridge.runtime !== 'electron') {
-        throw new Error('LAN hosting is available only in the Electron desktop app.')
+      if (desktopBridge.runtime === 'web') {
+        throw new Error('LAN hosting is available only in the desktop app.')
       }
 
       await stop()
@@ -370,7 +370,7 @@ export const useCollaborationSession = ({
         throw new Error('LAN server URL and room ID are required.')
       }
 
-      if (desktopBridge.runtime === 'electron') {
+      if (desktopBridge.runtime !== 'web') {
         const result = await desktopBridge.joinLanCollaboration({
           serverUrl: normalizedServerUrl,
           roomId: normalizedRoomId,

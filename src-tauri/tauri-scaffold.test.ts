@@ -41,9 +41,31 @@ describe('Pass 1 Tauri shell', () => {
     }
   })
 
-  it('uses Tauri 2 and exposes only Pass 1 compatibility commands', () => {
+  it('uses Tauri 2 and exposes the complete desktop command surface', () => {
     expect(cargoManifest).toContain('tauri = { version = "2.11.3"')
-    expect(rustLibrary).toContain('legacy_data_candidates')
-    expect(rustLibrary).toContain('classify_installation')
+    for (const command of [
+      'project_autosave',
+      'project_read_autosave',
+      'project_save_file',
+      'project_save_path',
+      'project_open_file',
+      'project_open_path',
+      'project_export_fountain',
+      'project_import_fountain',
+      'project_import_fdx',
+      'project_export_fdx',
+      'project_import_docx',
+      'project_export_docx',
+      'project_export_pdf',
+      'collaboration_lan_host',
+      'collaboration_lan_join',
+      'collaboration_lan_stop',
+      'collaboration_lan_status',
+      'bootstrap_installation',
+      'installation_get_state',
+      'installation_set_tutorial_completed',
+    ]) {
+      expect(rustLibrary).toContain(command)
+    }
   })
 })

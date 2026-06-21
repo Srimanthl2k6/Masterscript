@@ -1,4 +1,4 @@
-name: Tauri Pass 1 Compatibility Proof
+name: Tauri Desktop Compatibility Proof
 
 on:
   workflow_dispatch:
@@ -87,8 +87,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force legacy | Out-Null
-          gh release download v0.1.13 --repo Srimanthl2k6/Masterscript --pattern 'MasterScript.Setup.0.1.13.exe' --dir legacy
-          $electronInstaller = Resolve-Path 'legacy\MasterScript.Setup.0.1.13.exe'
+          gh release download v0.1.14 --repo Srimanthl2k6/Masterscript --pattern 'MasterScript.Setup.0.1.14.exe' --dir legacy
+          $electronInstaller = Resolve-Path 'legacy\MasterScript.Setup.0.1.14.exe'
           Start-Process -FilePath $electronInstaller -ArgumentList '/S' -Wait -WindowStyle Hidden
 
           $legacyData = Join-Path $env:APPDATA 'MasterScript'
@@ -107,7 +107,7 @@ jobs:
         if: matrix.platform == 'macos'
         run: |
           mkdir -p legacy replacement "$HOME/Library/Application Support/MasterScript"
-          gh release download v0.1.13 --repo Srimanthl2k6/Masterscript --pattern 'MasterScript.mac.0.1.13.universal.dmg' --dir legacy
+          gh release download v0.1.14 --repo Srimanthl2k6/Masterscript --pattern 'MasterScript.mac.0.1.14.universal.dmg' --dir legacy
           echo '{"legacyInstall":true,"tutorialCompleted":true}' > "$HOME/Library/Application Support/MasterScript/pass1-migration-sentinel.json"
 
           LEGACY_MOUNT="$(mktemp -d)"
@@ -128,7 +128,7 @@ jobs:
         if: matrix.platform == 'linux'
         run: |
           mkdir -p legacy "$HOME/.config/MasterScript"
-          gh release download v0.1.13 --repo Srimanthl2k6/Masterscript --pattern 'MasterScript.linux.0.1.13.amd64.deb' --dir legacy
+          gh release download v0.1.14 --repo Srimanthl2k6/Masterscript --pattern 'MasterScript.linux.0.1.14.amd64.deb' --dir legacy
           echo '{"legacyInstall":true,"tutorialCompleted":true}' > "$HOME/.config/MasterScript/pass1-migration-sentinel.json"
 
           sudo dpkg -i legacy/*.deb || sudo apt-get install -f -y

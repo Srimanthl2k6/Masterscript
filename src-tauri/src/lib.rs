@@ -1,44 +1,45 @@
+mod commands;
+mod lan;
 mod legacy;
+mod migration;
+mod models;
+mod persistence;
 
-use legacy::InstallState;
-use std::path::Path;
-use tauri::Manager;
-
-#[tauri::command]
-fn legacy_data_candidates() -> Vec<String> {
-    legacy::current_platform_candidates()
-}
-
-#[tauri::command]
-fn classify_installation(app: tauri::AppHandle) -> InstallState {
-    let legacy_exists = legacy::current_platform_candidates()
-        .iter()
-        .any(|candidate| Path::new(candidate).exists());
-    let settings_path = app
-        .path()
-        .app_data_dir()
-        .ok()
-        .map(|directory| directory.join("install-state-v1.json"));
-    let stored_tutorial_completed = settings_path
-        .as_ref()
-        .and_then(|path| std::fs::read_to_string(path).ok())
-        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-        .and_then(|value| value.get("tutorialCompleted")?.as_bool());
-    let tauri_settings_exist = settings_path.as_ref().is_some_and(|path| path.is_file());
-
-    legacy::classify(
-        legacy_exists,
-        tauri_settings_exist,
-        stored_tutorial_completed,
-    )
-}
+use commands::{
+    bootstrap_installation, collaboration_lan_host, collaboration_lan_join,
+    collaboration_lan_status, collaboration_lan_stop, installation_get_state,
+    installation_set_tutorial_completed, project_autosave, project_export_docx, project_export_fdx,
+    project_export_fountain, project_export_pdf, project_import_docx, project_import_fdx,
+    project_import_fountain, project_open_file, project_open_path, project_read_autosave,
+    project_save_file, project_save_path,
+};
+use lan::LanRelayState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(LanRelayState::default())
         .invoke_handler(tauri::generate_handler![
-            legacy_data_candidates,
-            classify_installation
+            project_autosave,
+            project_read_autosave,
+            project_save_file,
+            project_save_path,
+            project_open_file,
+            project_open_path,
+            project_export_fountain,
+            project_import_fountain,
+            project_import_fdx,
+            project_export_fdx,
+            project_import_docx,
+            project_export_docx,
+            project_export_pdf,
+            collaboration_lan_host,
+            collaboration_lan_join,
+            collaboration_lan_stop,
+            collaboration_lan_status,
+            bootstrap_installation,
+            installation_get_state,
+            installation_set_tutorial_completed,
         ])
         .run(tauri::generate_context!())
         .expect("error while running MasterScript");

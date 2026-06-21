@@ -6,8 +6,12 @@ import type {
   MigrationManifestV1,
   OperationResult,
 } from './types'
+import {
+  createTauriDesktopBridge,
+  type TauriInvoker,
+} from './tauriBridge'
 
-const unavailableMessage = 'Desktop operation is not available in this Pass 1 Tauri shell.'
+const unavailableMessage = 'This operation is available only in the desktop app.'
 
 const unavailable = async (): Promise<OperationResult> => ({
   ok: false,
@@ -44,6 +48,14 @@ const createNonElectronBridge = (runtime: 'web' | 'tauri'): DesktopBridge => ({
     migrationVersion: null,
   }),
   setTutorialCompleted: async () => undefined,
+  bootstrapInstallation: async () => ({
+    installState: {
+      kind: 'fresh',
+      tutorialCompleted: false,
+      migrationVersion: null,
+    },
+    migrationManifest: null,
+  }),
 })
 
 const createElectronBridge = (api: DesktopNativeApi): DesktopBridge => ({
@@ -76,6 +88,16 @@ const createElectronBridge = (api: DesktopNativeApi): DesktopBridge => ({
     }),
   setTutorialCompleted: (completed) =>
     api.setTutorialCompleted?.(completed) ?? Promise.resolve(),
+  bootstrapInstallation: () =>
+    api.bootstrapInstallation?.() ??
+    Promise.resolve({
+      installState: {
+        kind: 'legacy-migrated',
+        tutorialCompleted: true,
+        migrationVersion: 1,
+      },
+      migrationManifest: null,
+    }),
 })
 
 interface DesktopWindow extends Window {
@@ -83,7 +105,18 @@ interface DesktopWindow extends Window {
   __TAURI_INTERNALS__?: unknown
 }
 
-export const createDesktopBridge = (): DesktopBridge => {
+interface CreateDesktopBridgeOptions {
+  tauriInvoke?: TauriInvoker
+}
+
+const invokeTauri: TauriInvoker = async (command, args) => {
+  const { invoke } = await import('@tauri-apps/api/core')
+  return invoke(command, args)
+}
+
+export const createDesktopBridge = (
+  options: CreateDesktopBridgeOptions = {},
+): DesktopBridge => {
   const desktopWindow =
     typeof window === 'undefined' ? undefined : (window as DesktopWindow)
 
@@ -92,7 +125,7 @@ export const createDesktopBridge = (): DesktopBridge => {
   }
 
   if (desktopWindow?.__TAURI_INTERNALS__) {
-    return createNonElectronBridge('tauri')
+    return createTauriDesktopBridge(options.tauriInvoke ?? invokeTauri)
   }
 
   return createNonElectronBridge('web')

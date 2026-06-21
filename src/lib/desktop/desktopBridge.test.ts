@@ -40,15 +40,19 @@ describe('createDesktopBridge', () => {
     expect(autosave).toHaveBeenCalledWith(project)
   })
 
-  it('identifies a Tauri shell without exposing unimplemented native operations', async () => {
+  it('identifies a Tauri shell and routes operations through invoke', async () => {
     vi.stubGlobal('window', { __TAURI_INTERNALS__: {} })
+    const tauriInvoke = vi.fn().mockResolvedValue({ ok: true, path: 'draft.msproj.json' })
 
-    const bridge = createDesktopBridge()
+    const bridge = createDesktopBridge({ tauriInvoke })
 
     expect(bridge.runtime).toBe('tauri')
-    await expect(bridge.saveProject({} as ScriptProject, 'Draft')).resolves.toEqual({
-      ok: false,
-      error: 'Desktop operation is not available in this Pass 1 Tauri shell.',
+    await expect(
+      bridge.saveProject({} as ScriptProject, 'Draft'),
+    ).resolves.toEqual({ ok: true, path: 'draft.msproj.json' })
+    expect(tauriInvoke).toHaveBeenCalledWith('project_save_file', {
+      project: {},
+      title: 'Draft',
     })
   })
 })

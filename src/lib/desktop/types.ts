@@ -28,6 +28,11 @@ export interface MigrationManifestV1 {
   autosavePath: string | null
 }
 
+export interface BootstrapInstallationResult {
+  installState: InstallState
+  migrationManifest: MigrationManifestV1 | null
+}
+
 export interface LanCollaborationHostOptions {
   roomId?: string
   port?: number
@@ -111,6 +116,7 @@ export interface DesktopNativeApi {
   ): Promise<OperationResult>
   getInstallState?(): Promise<InstallState>
   setTutorialCompleted?(completed: boolean): Promise<void>
+  bootstrapInstallation?(): Promise<BootstrapInstallationResult>
 }
 
 export interface DesktopBridge extends Omit<DesktopNativeApi, 'isElectron'> {
@@ -118,4 +124,5 @@ export interface DesktopBridge extends Omit<DesktopNativeApi, 'isElectron'> {
   exportMigrationManifest(manifest: MigrationManifestV1): Promise<OperationResult>
   getInstallState(): Promise<InstallState>
   setTutorialCompleted(completed: boolean): Promise<void>
+  bootstrapInstallation(): Promise<BootstrapInstallationResult>
 }

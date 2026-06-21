@@ -24,7 +24,7 @@ describe('Tauri Pass 1 proof workflow', () => {
   })
 
   it('tests replacement from the final Electron bridge baseline on every platform', () => {
-    expect(workflow.match(/gh release download v0\.1\.13/g)).toHaveLength(3)
+    expect(workflow.match(/gh release download v0\.1\.14/g)).toHaveLength(3)
     expect(workflow).toContain('GH_TOKEN: ${{ github.token }}')
     expect(workflow.match(/pass1-migration-sentinel\.json/g)?.length).toBeGreaterThanOrEqual(5)
     expect(workflow).toContain('Tauri installation removed Electron application data')
