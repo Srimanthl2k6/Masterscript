@@ -1,0 +1,143 @@
+name: Tauri Pass 1 Compatibility Proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/tauri-pass-1
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    name: ${{ matrix.platform }} compatibility
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+            bundle: nsis
+          - platform: macos
+            os: macos-latest
+            bundle: dmg
+          - platform: linux
+            os: ubuntu-22.04
+            bundle: deb
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux Tauri prerequisites
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            wget
+
+      - name: Install JavaScript dependencies
+        run: npm ci
+
+      - name: Verify JavaScript compatibility contracts
+        run: npm test
+
+      - name: Verify unchanged frontend build
+        run: npm run build:web
+
+      - name: Verify Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Verify Rust compatibility tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build internal Tauri installer
+        run: npm run tauri:build -- --config src-tauri/tauri.ci.conf.json --bundles ${{ matrix.bundle }}
+
+      - name: Prove Windows Electron-to-Tauri replacement preserves legacy data
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force legacy | Out-Null
+          gh release download v0.1.13 --repo Srimanthl2k6/Masterscript --pattern 'MasterScript.Setup.0.1.13.exe' --dir legacy
+          $electronInstaller = Resolve-Path 'legacy\MasterScript.Setup.0.1.13.exe'
+          Start-Process -FilePath $electronInstaller -ArgumentList '/S' -Wait -WindowStyle Hidden
+
+          $legacyData = Join-Path $env:APPDATA 'MasterScript'
+          New-Item -ItemType Directory -Force $legacyData | Out-Null
+          $sentinel = Join-Path $legacyData 'pass1-migration-sentinel.json'
+          '{"legacyInstall":true,"tutorialCompleted":true}' | Set-Content -LiteralPath $sentinel
+
+          $tauriInstaller = Get-ChildItem 'src-tauri\target\release\bundle\nsis\*.exe' | Select-Object -First 1
+          Start-Process -FilePath $tauriInstaller.FullName -ArgumentList '/S' -Wait -WindowStyle Hidden
+
+          if (-not (Test-Path -LiteralPath $sentinel)) {
+            throw 'Tauri installation removed Electron application data'
+          }
+
+      - name: Prove macOS Electron-to-Tauri app replacement preserves legacy data
+        if: matrix.platform == 'macos'
+        run: |
+          mkdir -p legacy replacement "$HOME/Library/Application Support/MasterScript"
+          gh release download v0.1.13 --repo Srimanthl2k6/Masterscript --pattern 'MasterScript.mac.0.1.13.universal.dmg' --dir legacy
+          echo '{"legacyInstall":true,"tutorialCompleted":true}' > "$HOME/Library/Application Support/MasterScript/pass1-migration-sentinel.json"
+
+          LEGACY_MOUNT="$(mktemp -d)"
+          hdiutil attach legacy/*.dmg -mountpoint "$LEGACY_MOUNT" -nobrowse
+          cp -R "$LEGACY_MOUNT/MasterScript.app" replacement/
+          hdiutil detach "$LEGACY_MOUNT"
+
+          TAURI_MOUNT="$(mktemp -d)"
+          hdiutil attach src-tauri/target/release/bundle/dmg/*.dmg -mountpoint "$TAURI_MOUNT" -nobrowse
+          rm -rf replacement/MasterScript.app
+          cp -R "$TAURI_MOUNT/MasterScript.app" replacement/
+          hdiutil detach "$TAURI_MOUNT"
+
+          test -f "$HOME/Library/Application Support/MasterScript/pass1-migration-sentinel.json"
+          test -d replacement/MasterScript.app
+
+      - name: Prove Linux Electron-to-Tauri package replacement preserves legacy data
+        if: matrix.platform == 'linux'
+        run: |
+          mkdir -p legacy "$HOME/.config/MasterScript"
+          gh release download v0.1.13 --repo Srimanthl2k6/Masterscript --pattern 'MasterScript.linux.0.1.13.amd64.deb' --dir legacy
+          echo '{"legacyInstall":true,"tutorialCompleted":true}' > "$HOME/.config/MasterScript/pass1-migration-sentinel.json"
+
+          sudo dpkg -i legacy/*.deb || sudo apt-get install -f -y
+          sudo dpkg -i src-tauri/target/release/bundle/deb/*.deb || sudo apt-get install -f -y
+
+          test -f "$HOME/.config/MasterScript/pass1-migration-sentinel.json"
+          dpkg -s masterscript
+
+      - name: Upload internal compatibility artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-pass1-${{ matrix.platform }}
+          path: src-tauri/target/release/bundle/
+          if-no-files-found: error

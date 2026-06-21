@@ -1,0 +1,292 @@
+{
+  "id": "d41c45c4-98ea-44ea-a907-94a257e64931",
+  "schemaVersion": 1,
+  "meta": {
+    "title": "MasterScript 5-Page Benchmark",
+    "author": "",
+    "contact": "",
+    "draftDate": "",
+    "credits": "Written by",
+    "titlePageNotes": "",
+    "includeTitlePage": false,
+    "showPageNumbers": true,
+    "showSceneNumbers": false,
+    "createdAt": "2026-06-21T12:16:16.106Z",
+    "updatedAt": "2026-06-21T12:16:16.106Z",
+    "revisionMode": false,
+    "activeRevision": "white"
+  },
+  "blocks": [
+    {
+      "id": "benchmark-scene-1",
+      "type": "scene-heading",
+      "text": "INT. BENCHMARK LOCATION 1 - DAY",
+      "revision": null,
+      "extension": null,
+      "dualDialogueId": null,
+      "dualDialogueSide": null,
+      "revisionMark": false,
+      "locked": false,
+      "omitted": false,
+      "omittedText": null,
+      "lockedPageLabel": null
+    },
+    {
+      "id": "benchmark-action-1",
+      "type": "action",
+      "text": "Benchmark action line 1. The cast crosses the room while production details remain visible.\nBenchmark action line 2. The cast crosses the room while production details remain visible.\nBenchmark action line 3. The cast crosses the room while production details remain visible.\nBenchmark action line 4. The cast crosses the room while production details remain visible.\nBenchmark action line 5. The cast crosses the room while production details remain visible.\nBenchmark action line 6. The cast crosses the room while production details remain visible.\nBenchmark action line 7. The cast crosses the room while production details remain visible.\nBenchmark action line 8. The cast crosses the room while production details remain visible.\nBenchmark action line 9. The cast crosses the room while production details remain visible.\nBenchmark action line 10. The cast crosses the room while production details remain visible.\nBenchmark action line 11. The cast crosses the room while production details remain visible.\nBenchmark action line 12. The cast crosses the room while production details remain visible.\nBenchmark action line 13. The cast crosses the room while production details remain visible.\nBenchmark action line 14. The cast crosses the room while production details remain visible.\nBenchmark action line 15. The cast crosses the room while production details remain visible.\nBenchmark action line 16. The cast crosses the room while production details remain visible.\nBenchmark action line 17. The cast crosses the room while production details remain visible.\nBenchmark action line 18. The cast crosses the room while production details remain visible.\nBenchmark action line 19. The cast crosses the room while production details remain visible.\nBenchmark action line 20. The cast crosses the room while production details remain visible.\nBenchmark action line 21. The cast crosses the room while production details remain visible.\nBenchmark action line 22. The cast crosses the room while production details remain visible.\nBenchmark action line 23. The cast crosses the room while production details remain visible.\nBenchmark action line 24. The cast crosses the room while production details remain visible.",
+      "revision": null,
+      "extension": null,
+      "dualDialogueId": null,
+      "dualDialogueSide": null,
+      "revisionMark": false,
+      "locked": false,
+      "omitted": false,
+      "omittedText": null,
+      "lockedPageLabel": null
+    },
+    {
+      "id": "benchmark-scene-2",
+      "type": "scene-heading",
+      "text": "INT. BENCHMARK LOCATION 2 - DAY",
+      "revision": null,
+      "extension": null,
+      "dualDialogueId": null,
+      "dualDialogueSide": null,
+      "revisionMark": false,
+      "locked": false,
+      "omitted": false,
+      "omittedText": null,
+      "lockedPageLabel": null
+    },
+    {
+      "id": "benchmark-action-2",
+      "type": "action",
+      "text": "Benchmark action line 1. The cast crosses the room while production details remain visible.\nBenchmark action line 2. The cast crosses the room while production details remain visible.\nBenchmark action line 3. The cast crosses the room while production details remain visible.\nBenchmark action line 4. The cast crosses the room while production details remain visible.\nBenchmark action line 5. The cast crosses the room while production details remain visible.\nBenchmark action line 6. The cast crosses the room while production details remain visible.\nBenchmark action line 7. The cast crosses the room while production details remain visible.\nBenchmark action line 8. The cast crosses the room while production details remain visible.\nBenchmark action line 9. The cast crosses the room while production details remain visible.\nBenchmark action line 10. The cast crosses the room while production details remain visible.\nBenchmark action line 11. The cast crosses the room while production details remain visible.\nBenchmark action line 12. The cast crosses the room while production details remain visible.\nBenchmark action line 13. The cast crosses the room while production details remain visible.\nBenchmark action line 14. The cast crosses the room while production details remain visible.\nBenchmark action line 15. The cast crosses the room while production details remain visible.\nBenchmark action line 16. The cast crosses the room while production details remain visible.\nBenchmark action line 17. The cast crosses the room while production details remain visible.\nBenchmark action line 18. The cast crosses the room while production details remain visible.\nBenchmark action line 19. The cast crosses the room while production details remain visible.\nBenchmark action line 20. The cast crosses the room while production details remain visible.\nBenchmark action line 21. The cast crosses the room while production details remain visible.\nBenchmark action line 22. The cast crosses the room while production details remain visible.\nBenchmark action line 23. The cast crosses the room while production details remain visible.\nBenchmark action line 24. The cast crosses the room while production details remain visible.",
+      "revision": null,
+      "extension": null,
+      "dualDialogueId": null,
+      "dualDialogueSide": null,
+      "revisionMark": false,
+      "locked": false,
+      "omitted": false,
+      "omittedText": null,
+      "lockedPageLabel": null
+    },
+    {
+      "id": "benchmark-scene-3",
+      "type": "scene-heading",
+      "text": "INT. BENCHMARK LOCATION 3 - DAY",
+      "revision": null,
+      "extension": null,
+      "dualDialogueId": null,
+      "dualDialogueSide": null,
+      "revisionMark": false,
+      "locked": false,
+      "omitted": false,
+      "omittedText": null,
+      "lockedPageLabel": null
+    },
+    {
+      "id": "benchmark-action-3",
+      "type": "action",
+      "text": "Benchmark action line 1. The cast crosses the room while production details remain visible.\nBenchmark action line 2. The cast crosses the room while production details remain visible.\nBenchmark action line 3. The cast crosses the room while production details remain visible.\nBenchmark action line 4. The cast crosses the room while production details remain visible.\nBenchmark action line 5. The cast crosses the room while production details remain visible.\nBenchmark action line 6. The cast crosses the room while production details remain visible.\nBenchmark action line 7. The cast crosses the room while production details remain visible.\nBenchmark action line 8. The cast crosses the room while production details remain visible.\nBenchmark action line 9. The cast crosses the room while production details remain visible.\nBenchmark action line 10. The cast crosses the room while production details remain visible.\nBenchmark action line 11. The cast crosses the room while production details remain visible.\nBenchmark action line 12. The cast crosses the room while production details remain visible.\nBenchmark action line 13. The cast crosses the room while production details remain visible.\nBenchmark action line 14. The cast crosses the room while production details remain visible.\nBenchmark action line 15. The cast crosses the room while production details remain visible.\nBenchmark action line 16. The cast crosses the room while production details remain visible.\nBenchmark action line 17. The cast crosses the room while production details remain visible.\nBenchmark action line 18. The cast crosses the room while production details remain visible.\nBenchmark action line 19. The cast crosses the room while production details remain visible.\nBenchmark action line 20. The cast crosses the room while production details remain visible.\nBenchmark action line 21. The cast crosses the room while production details remain visible.\nBenchmark action line 22. The cast crosses the room while production details remain visible.\nBenchmark action line 23. The cast crosses the room while production details remain visible.\nBenchmark action line 24. The cast crosses the room while production details remain visible.",
+      "revision": null,
+      "extension": null,
+      "dualDialogueId": null,
+      "dualDialogueSide": null,
+      "revisionMark": false,
+      "locked": false,
+      "omitted": false,
+      "omittedText": null,
+      "lockedPageLabel": null
+    },
+    {
+      "id": "benchmark-scene-4",
+      "type": "scene-heading",
+      "text": "INT. BENCHMARK LOCATION 4 - DAY",
+      "revision": null,
+      "extension": null,
+      "dualDialogueId": null,
+      "dualDialogueSide": null,
+      "revisionMark": false,
+      "locked": false,
+      "omitted": false,
+      "omittedText": null,
+      "lockedPageLabel": null
+    },
+    {
+      "id": "benchmark-action-4",
+      "type": "action",
+      "text": "Benchmark action line 1. The cast crosses the room while production details remain visible.\nBenchmark action line 2. The cast crosses the room while production details remain visible.\nBenchmark action line 3. The cast crosses the room while production details remain visible.\nBenchmark action line 4. The cast crosses the room while production details remain visible.\nBenchmark action line 5. The cast crosses the room while production details remain visible.\nBenchmark action line 6. The cast crosses the room while production details remain visible.\nBenchmark action line 7. The cast crosses the room while production details remain visible.\nBenchmark action line 8. The cast crosses the room while production details remain visible.\nBenchmark action line 9. The cast crosses the room while production details remain visible.\nBenchmark action line 10. The cast crosses the room while production details remain visible.\nBenchmark action line 11. The cast crosses the room while production details remain visible.\nBenchmark action line 12. The cast crosses the room while production details remain visible.\nBenchmark action line 13. The cast crosses the room while production details remain visible.\nBenchmark action line 14. The cast crosses the room while production details remain visible.\nBenchmark action line 15. The cast crosses the room while production details remain visible.\nBenchmark action line 16. The cast crosses the room while production details remain visible.\nBenchmark action line 17. The cast crosses the room while production details remain visible.\nBenchmark action line 18. The cast crosses the room while production details remain visible.\nBenchmark action line 19. The cast crosses the room while production details remain visible.\nBenchmark action line 20. The cast crosses the room while production details remain visible.\nBenchmark action line 21. The cast crosses the room while production details remain visible.\nBenchmark action line 22. The cast crosses the room while production details remain visible.\nBenchmark action line 23. The cast crosses the room while production details remain visible.\nBenchmark action line 24. The cast crosses the room while production details remain visible.",
+      "revision": null,
+      "extension": null,
+      "dualDialogueId": null,
+      "dualDialogueSide": null,
+      "revisionMark": false,
+      "locked": false,
+      "omitted": false,
+      "omittedText": null,
+      "lockedPageLabel": null
+    }
+  ],
+  "revisionSnapshots": [],
+  "revisionDraftSets": [],
+  "dialogueStash": [],
+  "cards": [
+    {
+      "id": "4798b871-986f-435e-a890-a91e45a4eada",
+      "title": "Opening hook",
+      "beat": "Set tone, protagonist pressure, and central question.",
+      "linkedSceneId": null,
+      "x": 24,
+      "y": 24,
+      "color": "#2f2f2f",
+      "imageDataUrl": ""
+    }
+  ],
+  "production": {
+    "schedule": [],
+    "breakdown": [],
+    "shots": [],
+    "crew": []
+  },
+  "budget": {
+    "items": []
+  },
+  "storyboards": [],
+  "catalog": [],
+  "story": {
+    "outline": [],
+    "sceneMeta": {},
+    "notes": {
+      "script": "",
+      "scratchpad": "",
+      "scenes": {},
+      "inline": []
+    }
+  },
+  "characters": {
+    "profiles": {},
+    "relationships": [],
+    "arcs": {}
+  },
+  "productivity": {
+    "settings": {
+      "focusMode": false,
+      "typewriterMode": false,
+      "fullscreenMode": false
+    },
+    "goals": {
+      "dailyPageGoal": 5,
+      "projectPageGoal": 100,
+      "dailyPagesWritten": 0
+    },
+    "sprints": {
+      "activeMinutes": 25,
+      "remainingSeconds": 1500,
+      "isRunning": false,
+      "sessions": []
+    },
+    "streak": {
+      "current": 0,
+      "longest": 0,
+      "lastWritingDate": null
+    },
+    "tts": {
+      "speed": 1,
+      "voiceByCharacter": {}
+    }
+  },
+  "tagging": {
+    "tags": [],
+    "catalog": []
+  },
+  "advanced": {
+    "activeFormat": "feature",
+    "formatting": {
+      "showContinuedHeaders": true,
+      "showContinuedFooters": true,
+      "characterContdEnabled": true,
+      "contdActionBreakLines": 1,
+      "includeFadeIn": true
+    },
+    "sceneNumbering": {
+      "locked": false,
+      "showNumbers": false,
+      "numbers": {}
+    },
+    "titlePage": {
+      "writtenBy": "",
+      "screenplayBy": "",
+      "storyBy": "",
+      "originalStoryBy": "",
+      "basedOn": "",
+      "earlierDraftWrittenBy": "",
+      "wgaRegistrationNumber": "",
+      "copyrightNotice": "Copyright 2026",
+      "coverImageDataUrl": ""
+    },
+    "submissionLocked": false,
+    "revisionDistributionLog": [],
+    "lockedPages": [],
+    "fixedPageMode": false,
+    "castStatuses": {},
+    "timing": {
+      "weights": {
+        "action": 0.75,
+        "dialogue": 1.25,
+        "mixed": 1
+      },
+      "manualSceneTimings": {}
+    },
+    "lint": {
+      "cutToThreshold": 12,
+      "parentheticalThreshold": 8,
+      "coldOpenPageLimit": 5,
+      "actImbalancePercent": 35,
+      "acknowledgedNonStandardExtensions": []
+    },
+    "series": {
+      "bible": "",
+      "season": 1,
+      "episodeTitle": "",
+      "plotThreads": {},
+      "sharedCharacters": {},
+      "sharedLocations": {}
+    },
+    "coverage": [],
+    "writerRoom": {
+      "parkingLot": [],
+      "whiteboard": [],
+      "research": []
+    },
+    "print": {
+      "draftInkSaver": false,
+      "twoUp": false,
+      "watermarkText": "",
+      "watermarkPosition": "center",
+      "watermarkOpacity": 0.16,
+      "recipientWatermark": ""
+    },
+    "accessibility": {
+      "taggedPdf": false,
+      "closedCaptionTemplate": false,
+      "audioDescriptionEnabled": false
+    },
+    "editor": {
+      "shortcuts": {
+        "scene-heading": "Ctrl+Alt+1",
+        "action": "Ctrl+Alt+2",
+        "character": "Ctrl+Alt+3",
+        "dialogue": "Ctrl+Alt+4",
+        "parenthetical": "Ctrl+Alt+5",
+        "transition": "Ctrl+Alt+6",
+        "shot": "Ctrl+Alt+7"
+      }
+    },
+    "legal": {
+      "draftNotes": {}
+    }
+  }
+}

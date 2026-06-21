@@ -14,6 +14,17 @@ import {
   type CollaborationInviteDetails,
 } from './lib/collaboration/collaborationInvite'
 import { DESKTOP_DOWNLOAD_LINKS, shouldShowDownloadButton } from './lib/download'
+import { desktopBridge } from './lib/desktop/desktopBridge'
+import { buildMigrationManifestV1 } from './lib/desktop/migration'
+import {
+  autosaveKey,
+  hostedLanRoomsKey,
+  recentProjectSnapshotsKey,
+  recentProjectsKey,
+  themeKey,
+} from './lib/desktop/storageKeys'
+import type { RecentProjectEntry } from './lib/desktop/types'
+import { legacySourceVersion } from './lib/desktop/version'
 import { paginateProjectForPrint } from './lib/adapters/pagination'
 import type { AdapterWarning } from './lib/adapters/types'
 import { paginateBlocksForEditor } from './lib/editorPagination'
@@ -255,10 +266,6 @@ interface QueuedSelection {
 }
 
 const historyLimit = 80
-const autosaveKey = 'masterscript-autosave-v1'
-const themeKey = 'masterscript-theme-v1'
-const recentProjectsKey = 'masterscript-recent-v1'
-const recentProjectSnapshotsKey = 'masterscript-recent-project-snapshots-v1'
 const defaultPreviewZoom = 0.82
 const useContinuousDraftEditor = false
 const characterVoiceCueOptions: Array<{ label: string; cue: CharacterVoiceCue }> = [
@@ -416,18 +423,9 @@ const shortcutFromKeyEvent = (
     .join('+')
 }
 
-interface RecentProjectEntry {
-  label: string
-  source: 'project' | 'import'
-  updatedAt: string
-  projectId?: string
-}
-
 const isLikelyLocalProjectPath = (value: string): boolean =>
   (/^[a-z]:[\\/]/i.test(value) || value.startsWith('\\\\')) &&
   /\.msproj\.json$/i.test(value)
-
-const hostedLanRoomsKey = 'masterscript-hosted-lan-rooms-v1'
 
 const readHostedLanRoomIds = (): Set<string> => {
   try {
@@ -1762,8 +1760,8 @@ function App() {
   })
 
   const persistProjectImmediately = useCallback(async (targetProject: ScriptProject) => {
-    if (window.masterscript) {
-      await window.masterscript.autosave(targetProject)
+    if (desktopBridge.runtime === 'electron') {
+      await desktopBridge.autosave(targetProject)
     } else {
       localStorage.setItem(autosaveKey, JSON.stringify(targetProject))
     }
@@ -1773,13 +1771,13 @@ function App() {
   const persistProjectToKnownPath = useCallback(
     async (targetProject: ScriptProject, explicitPath = savedPath) => {
       if (
-        !window.masterscript?.saveProjectPath ||
+        desktopBridge.runtime !== 'electron' ||
         !isLikelyLocalProjectPath(explicitPath)
       ) {
         return
       }
 
-      await window.masterscript.saveProjectPath(explicitPath, targetProject)
+      await desktopBridge.saveProjectPath(explicitPath, targetProject)
     },
     [savedPath],
   )
@@ -2020,8 +2018,8 @@ function App() {
 
     const restoreAutosave = async () => {
       try {
-        if (window.masterscript) {
-          const result = await window.masterscript.readAutosave()
+        if (desktopBridge.runtime === 'electron') {
+          const result = await desktopBridge.readAutosave()
           if (active && result.ok && result.project) {
             const recovered = hydrateProject(result.project)
             setHistory({ past: [], present: recovered, future: [] })
@@ -2078,17 +2076,35 @@ function App() {
   }, [recentProjects])
 
   useEffect(() => {
+    if (desktopBridge.runtime !== 'electron') {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      const manifest = buildMigrationManifestV1({
+        storage: localStorage,
+        sourceVersion: legacySourceVersion,
+        autosavePath: null,
+      })
+      void desktopBridge.exportMigrationManifest(manifest)
+    }, 0)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [recentProjects, themeMode])
+
+  useEffect(() => {
     const timer = window.setTimeout(() => {
       const persist = async () => {
         try {
           setAutosaveState('saving')
-          if (window.masterscript) {
-            await window.masterscript.autosave(project)
+          if (desktopBridge.runtime === 'electron') {
+            await desktopBridge.autosave(project)
             if (
-              window.masterscript.saveProjectPath &&
               isLikelyLocalProjectPath(savedPath)
             ) {
-              await window.masterscript.saveProjectPath(savedPath, project)
+              await desktopBridge.saveProjectPath(savedPath, project)
             }
           } else {
             localStorage.setItem(autosaveKey, JSON.stringify(project))
@@ -2801,8 +2817,8 @@ function App() {
   const saveProject = async () => {
     const serialized = JSON.stringify(project, null, 2)
 
-    if (window.masterscript) {
-      const result = await window.masterscript.saveProject(project, project.meta.title)
+    if (desktopBridge.runtime === 'electron') {
+      const result = await desktopBridge.saveProject(project, project.meta.title)
       if (result.ok) {
         setSavedPath(result.path ?? 'Saved with desktop file picker')
         setStatusMessage('Project saved to disk')
@@ -2825,8 +2841,8 @@ function App() {
   }
 
   const openProject = async () => {
-    if (window.masterscript) {
-      const result = await window.masterscript.openProject()
+    if (desktopBridge.runtime === 'electron') {
+      const result = await desktopBridge.openProject()
       if (result.ok && result.project) {
         const loadedProject = hydrateProject(result.project)
         await collaboration.stop()
@@ -2848,8 +2864,8 @@ function App() {
 
   const openAutosavedRecentFallback = async (entry: RecentProjectEntry) => {
     try {
-      if (window.masterscript) {
-        const result = await window.masterscript.readAutosave()
+      if (desktopBridge.runtime === 'electron') {
+        const result = await desktopBridge.readAutosave()
         if (result.ok && result.project) {
           const recovered = hydrateProject(result.project)
           await collaboration.stop()
@@ -2913,7 +2929,7 @@ function App() {
     }
 
     if (!isLikelyLocalProjectPath(entry.label)) {
-      if (window.masterscript) {
+      if (desktopBridge.runtime === 'electron') {
         setStatusMessage('This recent item was not saved to a project file path yet')
         return
       }
@@ -2923,14 +2939,14 @@ function App() {
       return
     }
 
-    if (!window.masterscript?.openProjectPath) {
+    if (desktopBridge.runtime !== 'electron') {
       setStatusMessage('Use Open Project to select this recent file')
       fileInputRef.current?.click()
       return
     }
 
     try {
-      const result = await window.masterscript.openProjectPath(entry.label)
+      const result = await desktopBridge.openProjectPath(entry.label)
       if (result.ok && result.project) {
         const loadedProject = hydrateProject(result.project)
         await collaboration.stop()
@@ -3153,8 +3169,8 @@ function App() {
       setCollaborationJoinStatus('Project synced. Choose where to save it.')
 
       let nextSavedPath = `${hydrated.meta.title || 'untitled'}.msproj.json`
-      if (window.masterscript) {
-        const saveResult = await window.masterscript.saveProject(
+      if (desktopBridge.runtime === 'electron') {
+        const saveResult = await desktopBridge.saveProject(
           hydrated,
           hydrated.meta.title,
         )
@@ -3210,8 +3226,8 @@ function App() {
 
   const exportFountain = async () => {
     const fountain = toFountain(project)
-    if (window.masterscript) {
-      const result = await window.masterscript.exportFountain(
+    if (desktopBridge.runtime === 'electron') {
+      const result = await desktopBridge.exportFountain(
         project.meta.title,
         fountain,
       )
@@ -3272,8 +3288,8 @@ function App() {
     try {
       const { importFountainProject } = await import('./lib/adapters/fountain')
 
-      if (window.masterscript?.importFountain) {
-        const result = await window.masterscript.importFountain()
+      if (desktopBridge.runtime === 'electron') {
+        const result = await desktopBridge.importFountain()
         if (!result.ok || !result.content) {
           return
         }
@@ -3301,8 +3317,8 @@ function App() {
     try {
       const { importFdxProject } = await import('./lib/adapters/fdx')
 
-      if (window.masterscript?.importFdx) {
-        const result = await window.masterscript.importFdx()
+      if (desktopBridge.runtime === 'electron') {
+        const result = await desktopBridge.importFdx()
         if (!result.ok || !result.content) {
           return
         }
@@ -3330,8 +3346,8 @@ function App() {
     try {
       const { exportProjectToFdx } = await import('./lib/adapters/fdx')
       const xml = exportProjectToFdx(project)
-      if (window.masterscript?.exportFdx) {
-        const result = await window.masterscript.exportFdx(project.meta.title, xml)
+      if (desktopBridge.runtime === 'electron') {
+        const result = await desktopBridge.exportFdx(project.meta.title, xml)
         if (result.ok) {
           setStatusMessage('FDX export created')
         }
@@ -3351,8 +3367,8 @@ function App() {
     try {
       const { importDocxProject } = await import('./lib/adapters/docx')
 
-      if (window.masterscript?.importDocx) {
-        const result = await window.masterscript.importDocx()
+      if (desktopBridge.runtime === 'electron') {
+        const result = await desktopBridge.importDocx()
         if (!result.ok || !result.base64) {
           return
         }
@@ -3381,9 +3397,9 @@ function App() {
       const { exportProjectToDocx } = await import('./lib/adapters/docx')
       const output = await exportProjectToDocx(project)
 
-      if (window.masterscript?.exportDocx) {
+      if (desktopBridge.runtime === 'electron') {
         const base64 = arrayBufferToBase64(output)
-        const result = await window.masterscript.exportDocx(project.meta.title, base64)
+        const result = await desktopBridge.exportDocx(project.meta.title, base64)
         if (result.ok) {
           setStatusMessage('DOCX export created')
         }
@@ -3408,9 +3424,9 @@ function App() {
       const { exportProjectToPdf } = await import('./lib/adapters/pdf')
       const output = await exportProjectToPdf(project)
 
-      if (window.masterscript?.exportPdf) {
+      if (desktopBridge.runtime === 'electron') {
         const base64 = arrayBufferToBase64(output)
-        const result = await window.masterscript.exportPdf(project.meta.title, base64)
+        const result = await desktopBridge.exportPdf(project.meta.title, base64)
         if (result.ok) {
           setStatusMessage('PDF export created')
         }
@@ -5326,7 +5342,7 @@ function App() {
     }
   }, [appView])
 
-  const isRunningInElectron = Boolean(window.masterscript?.isElectron)
+  const isRunningInElectron = desktopBridge.runtime === 'electron'
   const showDownloadButton = shouldShowDownloadButton(isRunningInElectron)
   const rightOutlineTitle = activeTab === 'draft' ? 'Writer Panel' : 'Scene Outlines'
 

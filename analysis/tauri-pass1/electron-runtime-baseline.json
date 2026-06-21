@@ -1,0 +1,51 @@
+{
+  "recordedAt": "2026-06-21T12:16:58.763Z",
+  "platform": "win32",
+  "architecture": "x64",
+  "electronVersion": "41.2.0",
+  "method": "Electron --headless with the unchanged Vite renderer and CDP",
+  "startupMs": 886,
+  "idleProcessMemory": {
+    "processCount": 4,
+    "workingSetBytes": 419639296,
+    "privateBytes": 388407296
+  },
+  "fixtures": [
+    {
+      "fixture": "small",
+      "title": "MasterScript 5-Page Benchmark",
+      "processMemory": {
+        "processCount": 4,
+        "workingSetBytes": 463638528,
+        "privateBytes": 468733952
+      },
+      "rendererJsHeapUsedBytes": 9212008,
+      "rendererDomNodes": 1207,
+      "rendererDocuments": 1
+    },
+    {
+      "fixture": "medium",
+      "title": "MasterScript 50-Page Benchmark",
+      "processMemory": {
+        "processCount": 4,
+        "workingSetBytes": 583413760,
+        "privateBytes": 508362752
+      },
+      "rendererJsHeapUsedBytes": 19983568,
+      "rendererDomNodes": 8832,
+      "rendererDocuments": 1
+    },
+    {
+      "fixture": "large-200-page",
+      "title": "MasterScript 200-Page Benchmark",
+      "processMemory": {
+        "processCount": 4,
+        "workingSetBytes": 705409024,
+        "privateBytes": 613363712
+      },
+      "rendererJsHeapUsedBytes": 95257616,
+      "rendererDomNodes": 33845,
+      "rendererDocuments": 1
+    }
+  ]
+}

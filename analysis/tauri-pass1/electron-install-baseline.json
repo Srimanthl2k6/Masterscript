@@ -1,0 +1,31 @@
+{
+  "recordedAt": "2026-06-21T11:55:00.000Z",
+  "host": {
+    "os": "Microsoft Windows 11 Home Single Language",
+    "version": "10.0.26200",
+    "build": "26200",
+    "cpu": "AMD Ryzen 7 5800HS with Radeon Graphics",
+    "physicalCores": 8,
+    "logicalProcessors": 16,
+    "totalPhysicalMemoryBytes": 16539348992
+  },
+  "installedElectron": {
+    "version": "0.1.13",
+    "path": "%LOCALAPPDATA%\\Programs\\MasterScript",
+    "installedBytes": 409043384,
+    "fileCount": 128,
+    "executableBytes": 222591488,
+    "appAsarBytes": 48345913
+  },
+  "normalWindowLaunch": {
+    "method": "Local Electron 41 production renderer, visible 1600x980 window, sampled after ready",
+    "startupMs": 2655,
+    "processCount": 4,
+    "workingSetBytes": 432791552,
+    "privateBytes": 322535424
+  },
+  "notes": [
+    "The installed executable exited before a stable sample on this host, so the normal-window RAM sample used the repository's matching Electron 41 runtime and production renderer.",
+    "The repeatable fixture benchmark is recorded separately in electron-runtime-baseline.json and is the threshold comparison source for later passes."
+  ]
+}

@@ -17,6 +17,10 @@ const normalizeFileName = (value) =>
     .replace(/^-+|-+$/g, '') || 'untitled-project'
 
 const getAutosavePath = () => path.join(app.getPath('userData'), 'autosave.msproj.json')
+const getMigrationManifestPath = () =>
+  path.join(app.getPath('userData'), 'migration-manifest-v1.json')
+const getTutorialStatePath = () =>
+  path.join(app.getPath('userData'), 'tutorial-state-v1.json')
 
 let collaborationHttpServer = null
 let collaborationServer = null
@@ -192,6 +196,46 @@ ipcMain.handle('project:read-autosave', async () => {
   } catch {
     return { ok: true, project: null }
   }
+})
+
+ipcMain.handle('migration:export-v1', async (_event, manifest) => {
+  if (!manifest || typeof manifest !== 'object') {
+    return { ok: false, error: 'Migration manifest is required' }
+  }
+
+  const migrationManifest = {
+    ...manifest,
+    schemaVersion: 1,
+    sourceVersion:
+      typeof manifest.sourceVersion === 'string' ? manifest.sourceVersion : app.getVersion(),
+    exportedAt:
+      typeof manifest.exportedAt === 'string'
+        ? manifest.exportedAt
+        : new Date().toISOString(),
+    legacyInstall: true,
+    tutorialCompleted: true,
+    autosavePath: getAutosavePath(),
+  }
+  const manifestPath = getMigrationManifestPath()
+  await fs.mkdir(path.dirname(manifestPath), { recursive: true })
+  await fs.writeFile(manifestPath, JSON.stringify(migrationManifest, null, 2), 'utf8')
+  return { ok: true, path: manifestPath }
+})
+
+ipcMain.handle('installation:get-state', async () => ({
+  kind: 'legacy-migrated',
+  tutorialCompleted: true,
+  migrationVersion: 1,
+}))
+
+ipcMain.handle('installation:set-tutorial-completed', async (_event, completed) => {
+  const tutorialStatePath = getTutorialStatePath()
+  await fs.mkdir(path.dirname(tutorialStatePath), { recursive: true })
+  await fs.writeFile(
+    tutorialStatePath,
+    JSON.stringify({ tutorialCompleted: Boolean(completed) }, null, 2),
+    'utf8',
+  )
 })
 
 ipcMain.handle('project:save-file', async (_event, payload) => {

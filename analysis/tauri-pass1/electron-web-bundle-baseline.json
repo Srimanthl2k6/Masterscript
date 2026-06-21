@@ -1,0 +1,74 @@
+{
+  "recordedAt": "2026-06-21T12:10:54.274Z",
+  "distBytes": 1981440,
+  "files": [
+    {
+      "path": "assets/index-CNLQSowe.js",
+      "bytes": 574138
+    },
+    {
+      "path": "assets/lib-BOJ75b_-.js",
+      "bytes": 497263
+    },
+    {
+      "path": "assets/es-CUjw-7C9.js",
+      "bytes": 426782
+    },
+    {
+      "path": "assets/dist-DNDDC2Sl.js",
+      "bytes": 400188
+    },
+    {
+      "path": "assets/index-DjDOFTgX.css",
+      "bytes": 45950
+    },
+    {
+      "path": "favicon.svg",
+      "bytes": 9522
+    },
+    {
+      "path": "assets/screenplay-DdbITZ-J.js",
+      "bytes": 8560
+    },
+    {
+      "path": "icons.svg",
+      "bytes": 5031
+    },
+    {
+      "path": "assets/fountain-D2N4zyQ5.js",
+      "bytes": 3167
+    },
+    {
+      "path": "assets/docx-BZqnPjkt.js",
+      "bytes": 2660
+    },
+    {
+      "path": "assets/normalize-Cs7-RTAV.js",
+      "bytes": 2029
+    },
+    {
+      "path": "assets/fdx-etLSym2M.js",
+      "bytes": 1625
+    },
+    {
+      "path": "assets/preload-helper-I1wKxk_B.js",
+      "bytes": 1208
+    },
+    {
+      "path": "assets/chunk-zsgVPwQN.js",
+      "bytes": 1207
+    },
+    {
+      "path": "assets/pdf-CLNoNXVz.js",
+      "bytes": 918
+    },
+    {
+      "path": "index.html",
+      "bytes": 865
+    },
+    {
+      "path": "assets/errors-DPk2Ezrr.js",
+      "bytes": 327
+    }
+  ]
+}

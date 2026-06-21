@@ -27,4 +27,9 @@ contextBridge.exposeInMainWorld('masterscript', {
     ipcRenderer.invoke('collaboration:lan-join', options),
   stopLanCollaboration: () => ipcRenderer.invoke('collaboration:lan-stop'),
   getLanCollaborationStatus: () => ipcRenderer.invoke('collaboration:lan-status'),
+  exportMigrationManifest: (manifest) =>
+    ipcRenderer.invoke('migration:export-v1', manifest),
+  getInstallState: () => ipcRenderer.invoke('installation:get-state'),
+  setTutorialCompleted: (completed) =>
+    ipcRenderer.invoke('installation:set-tutorial-completed', completed),
 })

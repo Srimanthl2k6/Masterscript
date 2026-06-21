@@ -23,6 +23,7 @@ import {
   yDocToScriptProject,
 } from './projectYjs'
 import type { ScriptProject } from '../../types/screenplay'
+import { desktopBridge } from '../desktop/desktopBridge'
 
 export type CollaborationStatus =
   | 'offline'
@@ -199,8 +200,8 @@ export const useCollaborationSession = ({
         await flushAutosave()
       }
       await destroyProvider()
-      if (sessionInfo?.mode === 'lan-host' && window.masterscript?.stopLanCollaboration) {
-        await window.masterscript.stopLanCollaboration()
+      if (sessionInfo?.mode === 'lan-host' && desktopBridge.runtime === 'electron') {
+        await desktopBridge.stopLanCollaboration()
       }
       ydocRef.current?.destroy()
       ydocRef.current = null
@@ -303,13 +304,13 @@ export const useCollaborationSession = ({
       options: CollaborationStartOptions = {},
     ): Promise<CollaborationStartResult> => {
       void options
-      if (!window.masterscript?.hostLanCollaboration) {
+      if (desktopBridge.runtime !== 'electron') {
         throw new Error('LAN hosting is available only in the Electron desktop app.')
       }
 
       await stop()
       const initial = resolveCollaborationDetails(project, 'lan')
-      const hostResult = (await window.masterscript.hostLanCollaboration({
+      const hostResult = (await desktopBridge.hostLanCollaboration({
         roomId: initial.details.roomId,
       })) as LanHostResult
       if (!hostResult.ok || !hostResult.primaryHostUrl || !hostResult.roomId) {
@@ -369,8 +370,8 @@ export const useCollaborationSession = ({
         throw new Error('LAN server URL and room ID are required.')
       }
 
-      if (window.masterscript?.joinLanCollaboration) {
-        const result = await window.masterscript.joinLanCollaboration({
+      if (desktopBridge.runtime === 'electron') {
+        const result = await desktopBridge.joinLanCollaboration({
           serverUrl: normalizedServerUrl,
           roomId: normalizedRoomId,
         })
