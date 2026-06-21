@@ -13,6 +13,8 @@ jobs:
   compatibility:
     name: ${{ matrix.platform }} compatibility
     runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ github.token }}
     strategy:
       fail-fast: false
       matrix:

@@ -27,8 +27,11 @@ describe('Pass 1 Tauri shell', () => {
 
   it('references icon assets that are tracked in the repository', () => {
     expect(tauriConfig.bundle.icon).toEqual([
-      '../build/icon.png',
-      '../build/icon.ico',
+      'icons/32x32.png',
+      'icons/128x128.png',
+      'icons/128x128@2x.png',
+      'icons/icon.icns',
+      'icons/icon.ico',
     ])
     for (const iconPath of tauriConfig.bundle.icon) {
       expect(existsSync(`src-tauri/${iconPath}`)).toBe(true)
