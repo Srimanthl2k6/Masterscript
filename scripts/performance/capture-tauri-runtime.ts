@@ -149,9 +149,10 @@ const measureInstalledFootprint = () => {
       Get-ItemProperty |
       Where-Object { $_.DisplayName -eq 'MasterScript' } |
       Select-Object -First 1
-    $location = $entry.InstallLocation
+    $location = ([string]$entry.InstallLocation).Trim('"')
     if (-not $location) { throw 'MasterScript install location was not registered' }
-    $files = Get-ChildItem -LiteralPath $location -Recurse -File
+    $files = Get-ChildItem -LiteralPath $location -Recurse |
+      Where-Object { -not $_.PSIsContainer }
     [ordered]@{
       path = $location
       fileCount = @($files).Count
@@ -260,6 +261,14 @@ try {
     idleProcessMemory,
     fixtures: fixtureReports,
     installedTauri: measureInstalledFootprint(),
+    thresholdBasis: {
+      memoryMetric: 'privateBytes',
+      rationale:
+        'Private bytes measure memory owned by MasterScript without double-counting shared system WebView2 pages.',
+      electronIdlePrivateBytes: 388_407_296,
+      electronLargePrivateBytes: 613_363_712,
+      electronInstalledBytes: 409_043_384,
+    },
   }
   await writeFile(
     path.join(outputDirectory, 'tauri-runtime-result.json'),
@@ -271,19 +280,18 @@ try {
     (fixture) => fixture.fixture === 'large-200-page',
   )
   const failures: string[] = []
-  if (idleProcessMemory.workingSetBytes > 419_639_296 * 0.5) {
+  if (idleProcessMemory.privateBytes > 388_407_296 * 0.5) {
     failures.push('Idle RAM reduction is below 50%')
   }
   if (
     !large ||
-    large.processMemory.workingSetBytes > 705_409_024 * 0.65
+    large.processMemory.privateBytes > 613_363_712 * 0.65
   ) {
     failures.push('200-page editing RAM reduction is below 35%')
   }
-  if (
-    report.installedTauri &&
-    report.installedTauri.installedBytes > 409_043_384 * 0.3
-  ) {
+  if (!report.installedTauri || report.installedTauri.installedBytes <= 0) {
+    failures.push('Installed footprint could not be measured')
+  } else if (report.installedTauri.installedBytes > 409_043_384 * 0.3) {
     failures.push('Installed footprint reduction is below 70%')
   }
   console.log(JSON.stringify(report, null, 2))
