@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 use tauri::async_runtime::{self, JoinHandle};
 use tauri::ipc::Channel;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
+use tokio::sync::{broadcast, mpsc, oneshot, Mutex, OwnedSemaphorePermit, Semaphore};
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::handshake::server::{
     ErrorResponse, Request, Response as HandshakeResponse,
@@ -34,6 +34,7 @@ type PeerSender = mpsc::Sender<Message>;
 pub const MAX_AUTHENTICATED_PEERS: usize = 8;
 pub const MAX_PENDING_HANDSHAKES: usize = 32;
 pub const MAX_MESSAGE_BYTES: usize = 8 * 1024 * 1024;
+pub const MAX_TRANSPORT_SESSIONS: usize = 8;
 const MAX_PEERS_PER_IP: usize = 4;
 const MAX_PENDING_PER_IP: usize = 4;
 const MAX_CONNECTION_ATTEMPTS_PER_MINUTE: usize = 12;
@@ -123,6 +124,7 @@ struct RunningRelay {
 struct TransportSession {
     sender: PeerSender,
     task: JoinHandle<()>,
+    _permit: OwnedSemaphorePermit,
 }
 
 #[derive(Default)]
@@ -130,9 +132,18 @@ pub struct LanRelayState {
     running: Mutex<Option<RunningRelay>>,
 }
 
-#[derive(Default)]
 pub struct LanTransportState {
     sessions: Mutex<HashMap<String, TransportSession>>,
+    session_slots: Arc<Semaphore>,
+}
+
+impl Default for LanTransportState {
+    fn default() -> Self {
+        Self {
+            sessions: Mutex::new(HashMap::new()),
+            session_slots: Arc::new(Semaphore::new(MAX_TRANSPORT_SESSIONS)),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize)]
@@ -208,6 +219,26 @@ pub fn create_room_id() -> String {
     let mut bytes = [0_u8; 16];
     OsRng.fill_bytes(&mut bytes);
     format!("ms2-{}", URL_SAFE_NO_PAD.encode(bytes))
+}
+
+fn validate_room_id(value: &str) -> Result<String, String> {
+    let room_id = value.trim();
+    let encoded = room_id
+        .strip_prefix("ms2-")
+        .ok_or_else(|| "LAN room ID must use protocol v2".to_owned())?;
+    if encoded.len() != 22
+        || !encoded
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    {
+        return Err("LAN room ID is invalid".into());
+    }
+    URL_SAFE_NO_PAD
+        .decode(encoded)
+        .ok()
+        .filter(|bytes| bytes.len() == 16)
+        .ok_or_else(|| "LAN room ID is invalid".to_owned())?;
+    Ok(room_id.to_owned())
 }
 
 fn create_session_id() -> String {
@@ -655,10 +686,13 @@ impl LanRelayState {
             Ok(value) => Arc::new(value),
             Err(error) => return LanHostResult::failure(error),
         };
-        let room_id = options
-            .room_id
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(create_room_id);
+        let room_id = match options.room_id {
+            Some(value) => match validate_room_id(&value) {
+                Ok(value) => value,
+                Err(error) => return LanHostResult::failure(error),
+            },
+            None => create_room_id(),
+        };
         let requested_port = options.port.unwrap_or(0);
         let listener = match TcpListener::bind(("0.0.0.0", requested_port)).await {
             Ok(listener) => listener,
@@ -768,13 +802,23 @@ impl LanTransportState {
             Ok(value) => value,
             Err(error) => return LanTransportOpenResult::failure(error),
         };
-        let room_id = options.room_id.trim().to_owned();
-        if room_id.is_empty() {
-            return LanTransportOpenResult::failure("LAN room ID is required");
-        }
+        let room_id = match validate_room_id(&options.room_id) {
+            Ok(value) => value,
+            Err(error) => return LanTransportOpenResult::failure(error),
+        };
         let mut url = match validate_transport_url(&options.server_url) {
             Ok(url) => url,
             Err(error) => return LanTransportOpenResult::failure(error),
+        };
+        {
+            let mut sessions = self.sessions.lock().await;
+            sessions.retain(|_, session| !session.task.inner().is_finished());
+        }
+        let permit = match self.session_slots.clone().try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                return LanTransportOpenResult::failure("LAN transport session limit reached")
+            }
         };
         url.set_path(&format!("/v2/{}", urlencoding::encode(&room_id)));
 
@@ -832,8 +876,14 @@ impl LanTransportState {
         });
 
         let mut sessions = self.sessions.lock().await;
-        sessions.retain(|_, session| !session.task.inner().is_finished());
-        sessions.insert(session_id.clone(), TransportSession { sender, task });
+        sessions.insert(
+            session_id.clone(),
+            TransportSession {
+                sender,
+                task,
+                _permit: permit,
+            },
+        );
         LanTransportOpenResult::success(session_id)
     }
 
@@ -870,8 +920,7 @@ impl LanTransportState {
 
 pub fn validate_join(options: LanJoinOptions) -> LanJoinResult {
     let server_url = options.server_url.trim().to_owned();
-    let room_id = options.room_id.trim().to_owned();
-    if server_url.is_empty() || room_id.is_empty() {
+    if server_url.is_empty() || options.room_id.trim().is_empty() {
         return LanJoinResult {
             ok: false,
             server_url: None,
@@ -879,6 +928,17 @@ pub fn validate_join(options: LanJoinOptions) -> LanJoinResult {
             error: Some("LAN server URL and room ID are required".into()),
         };
     }
+    let room_id = match validate_room_id(&options.room_id) {
+        Ok(value) => value,
+        Err(error) => {
+            return LanJoinResult {
+                ok: false,
+                server_url: None,
+                room_id: None,
+                error: Some(error),
+            }
+        }
+    };
     if let Err(error) = validate_transport_url(&server_url) {
         return LanJoinResult {
             ok: false,
@@ -900,8 +960,9 @@ mod tests {
     use super::{
         accepts_peer_message, create_auth_proof, create_room_id, is_allowed_peer,
         release_reserved_peer, room_from_path, try_acquire_handshake, try_reserve_peer,
-        validate_join, verify_auth_proof, LanRelayState, LanTransportState, PeerRate, RelayRoom,
-        MAX_AUTHENTICATED_PEERS, MAX_MESSAGE_BYTES, MAX_PENDING_HANDSHAKES,
+        validate_join, validate_room_id, verify_auth_proof, LanRelayState, LanTransportState,
+        PeerRate, RelayRoom, MAX_AUTHENTICATED_PEERS, MAX_MESSAGE_BYTES, MAX_PENDING_HANDSHAKES,
+        MAX_TRANSPORT_SESSIONS,
     };
     use crate::models::{
         LanHostOptions, LanJoinOptions, LanTransportEvent, LanTransportOpenOptions,
@@ -914,29 +975,42 @@ mod tests {
     use tauri::ipc::{Channel, InvokeResponseBody};
     use tokio::time::sleep;
 
+    fn valid_room_id(seed: u8) -> String {
+        format!("ms2-{}", URL_SAFE_NO_PAD.encode([seed; 16]))
+    }
+
     #[test]
     fn validates_lan_join_urls() {
+        let room_id = valid_room_id(1);
         assert!(
             validate_join(LanJoinOptions {
                 server_url: "ws://127.0.0.1:4567".into(),
-                room_id: "room-a".into(),
+                room_id: room_id.clone(),
             })
             .ok
         );
         assert!(
             !validate_join(LanJoinOptions {
                 server_url: "https://example.com".into(),
-                room_id: "room-a".into(),
+                room_id: room_id.clone(),
             })
             .ok
         );
         assert!(
             !validate_join(LanJoinOptions {
                 server_url: "ws://8.8.8.8:4567".into(),
-                room_id: "room-a".into(),
+                room_id,
             })
             .ok
         );
+    }
+
+    #[test]
+    fn accepts_only_128_bit_protocol_v2_room_ids() {
+        let room_id = valid_room_id(7);
+        assert_eq!(validate_room_id(&room_id), Ok(room_id));
+        assert!(validate_room_id("ms2-short").is_err());
+        assert!(validate_room_id("legacy-room").is_err());
     }
 
     #[test]
@@ -1003,6 +1077,27 @@ mod tests {
         assert_eq!(MAX_AUTHENTICATED_PEERS, 8);
         assert_eq!(MAX_PENDING_HANDSHAKES, 32);
         assert_eq!(MAX_MESSAGE_BYTES, 8 * 1024 * 1024);
+        assert_eq!(MAX_TRANSPORT_SESSIONS, 8);
+    }
+
+    #[test]
+    fn reserves_no_more_than_eight_client_transport_slots() {
+        let transports = LanTransportState::default();
+        let permits = (0..MAX_TRANSPORT_SESSIONS)
+            .map(|_| {
+                transports
+                    .session_slots
+                    .clone()
+                    .try_acquire_owned()
+                    .expect("transport slot")
+            })
+            .collect::<Vec<_>>();
+        assert!(transports
+            .session_slots
+            .clone()
+            .try_acquire_owned()
+            .is_err());
+        drop(permits);
     }
 
     #[test]
@@ -1143,9 +1238,9 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn relays_messages_only_between_authenticated_protocol_v2_clients() {
-        let room_id = "ms2-integration-room";
+        let room_id = valid_room_id(10);
         let auth_key = URL_SAFE_NO_PAD.encode([9_u8; 32]);
-        let (host, server_url) = start_test_host(room_id, &auth_key).await;
+        let (host, server_url) = start_test_host(&room_id, &auth_key).await;
         let transports = LanTransportState::default();
         let (first_channel, _) = capture_channel();
         let (second_channel, second_events) = capture_channel();
@@ -1153,7 +1248,7 @@ mod tests {
             .open(
                 LanTransportOpenOptions {
                     server_url: server_url.clone(),
-                    room_id: room_id.into(),
+                    room_id: room_id.clone(),
                     auth_key: auth_key.clone(),
                 },
                 first_channel,
@@ -1163,7 +1258,7 @@ mod tests {
             .open(
                 LanTransportOpenOptions {
                     server_url,
-                    room_id: room_id.into(),
+                    room_id,
                     auth_key,
                 },
                 second_channel,
@@ -1190,10 +1285,10 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn rejects_wrong_keys_unknown_rooms_and_oversized_messages() {
-        let room_id = "ms2-integration-room";
+        let room_id = valid_room_id(11);
         let auth_key = URL_SAFE_NO_PAD.encode([9_u8; 32]);
         let wrong_key = URL_SAFE_NO_PAD.encode([8_u8; 32]);
-        let (host, server_url) = start_test_host(room_id, &auth_key).await;
+        let (host, server_url) = start_test_host(&room_id, &auth_key).await;
         let transports = LanTransportState::default();
 
         let (wrong_channel, _) = capture_channel();
@@ -1201,7 +1296,7 @@ mod tests {
             .open(
                 LanTransportOpenOptions {
                     server_url: server_url.clone(),
-                    room_id: room_id.into(),
+                    room_id: room_id.clone(),
                     auth_key: wrong_key,
                 },
                 wrong_channel,
@@ -1214,7 +1309,7 @@ mod tests {
             .open(
                 LanTransportOpenOptions {
                     server_url: server_url.clone(),
-                    room_id: "ms2-unknown".into(),
+                    room_id: valid_room_id(12),
                     auth_key: auth_key.clone(),
                 },
                 unknown_channel,
@@ -1227,7 +1322,7 @@ mod tests {
             .open(
                 LanTransportOpenOptions {
                     server_url,
-                    room_id: room_id.into(),
+                    room_id,
                     auth_key,
                 },
                 valid_channel,
@@ -1251,16 +1346,16 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn reconnects_after_a_transport_session_is_closed() {
-        let room_id = "ms2-reconnect-room";
+        let room_id = valid_room_id(13);
         let auth_key = URL_SAFE_NO_PAD.encode([3_u8; 32]);
-        let (host, server_url) = start_test_host(room_id, &auth_key).await;
+        let (host, server_url) = start_test_host(&room_id, &auth_key).await;
         let transports = LanTransportState::default();
         let (first_channel, _) = capture_channel();
         let first = transports
             .open(
                 LanTransportOpenOptions {
                     server_url: server_url.clone(),
-                    room_id: room_id.into(),
+                    room_id: room_id.clone(),
                     auth_key: auth_key.clone(),
                 },
                 first_channel,
@@ -1279,7 +1374,7 @@ mod tests {
             .open(
                 LanTransportOpenOptions {
                     server_url,
-                    room_id: room_id.into(),
+                    room_id,
                     auth_key,
                 },
                 second_channel,
@@ -1293,16 +1388,16 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn stopping_the_host_disconnects_authenticated_clients() {
-        let room_id = "ms2-stop-room";
+        let room_id = valid_room_id(14);
         let auth_key = URL_SAFE_NO_PAD.encode([4_u8; 32]);
-        let (host, server_url) = start_test_host(room_id, &auth_key).await;
+        let (host, server_url) = start_test_host(&room_id, &auth_key).await;
         let transports = LanTransportState::default();
         let (channel, events) = capture_channel();
         let opened = transports
             .open(
                 LanTransportOpenOptions {
                     server_url,
-                    room_id: room_id.into(),
+                    room_id,
                     auth_key,
                 },
                 channel,

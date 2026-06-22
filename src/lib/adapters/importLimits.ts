@@ -1,5 +1,6 @@
 import type { ScriptProjectAdapterResult } from './types'
 import type { ScriptProject } from '../../types/screenplay'
+import { blockTypeOrder } from '../../types/screenplay'
 
 export const MAX_TEXT_IMPORT_BYTES = 10 * 1024 * 1024
 export const MAX_DOCX_COMPRESSED_BYTES = 25 * 1024 * 1024
@@ -7,6 +8,7 @@ export const MAX_GENERATED_TEXT_BYTES = 20 * 1024 * 1024
 export const MAX_IMPORTED_BLOCKS = 50_000
 export const MAX_PROJECT_JSON_BYTES = 50 * 1024 * 1024
 export const MAX_PROJECT_JSON_NODES = 500_000
+const supportedBlockTypes = new Set<string>(blockTypeOrder)
 
 const utf8Length = (value: string): number =>
   new TextEncoder().encode(value).byteLength
@@ -47,9 +49,27 @@ export const validateProjectCandidate = (candidate: unknown): ScriptProject => {
   }
 
   const project = candidate as ScriptProject
+  const validateBlocks = (
+    blocks: unknown[],
+    label: string,
+  ): void => {
+    for (const block of blocks) {
+      if (
+        !block ||
+        typeof block !== 'object' ||
+        typeof (block as { id?: unknown }).id !== 'string' ||
+        typeof (block as { type?: unknown }).type !== 'string' ||
+        !supportedBlockTypes.has((block as { type: string }).type) ||
+        typeof (block as { text?: unknown }).text !== 'string'
+      ) {
+        throw new Error(`${label} contains invalid block fields.`)
+      }
+    }
+  }
   if (project.blocks.length > MAX_IMPORTED_BLOCKS) {
     throw new Error('Project JSON exceeds the 50,000 blocks limit.')
   }
+  validateBlocks(project.blocks, 'Project JSON')
   if (
     project.revisionSnapshots !== undefined &&
     (!Array.isArray(project.revisionSnapshots) ||
@@ -61,6 +81,9 @@ export const validateProjectCandidate = (candidate: unknown): ScriptProject => {
       ))
   ) {
     throw new Error('Project JSON contains invalid or oversized revision snapshots.')
+  }
+  for (const snapshot of project.revisionSnapshots ?? []) {
+    validateBlocks(snapshot.blocks, 'Project JSON revision snapshot')
   }
 
   let textBytes = 0

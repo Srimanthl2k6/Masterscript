@@ -266,6 +266,43 @@ fn existing_installation(
     })
 }
 
+fn recover_existing_tauri_installation(
+    app_directory: &Path,
+    install_state_path: &Path,
+    imported_manifest_path: &Path,
+) -> io::Result<Option<BootstrapInstallationResult>> {
+    let evidence_files = [
+        AUTOSAVE_FILE,
+        RECENT_PROJECT_SNAPSHOTS_FILE,
+        IMPORTED_MANIFEST_FILE,
+        MIGRATION_REPORT_FILE,
+        "file-grants-v1.json",
+    ];
+    if !evidence_files
+        .iter()
+        .any(|name| app_directory.join(name).is_file())
+    {
+        return Ok(None);
+    }
+
+    let manifest = read_valid_manifest(imported_manifest_path);
+    let migration_version = manifest.as_ref().map(|_| 1);
+    let persisted = PersistedInstallState {
+        tutorial_completed: true,
+        migration_version,
+        legacy_migrated: migration_version.is_some(),
+    };
+    write_json_atomic(install_state_path, &persisted)?;
+    Ok(Some(BootstrapInstallationResult {
+        install_state: InstallState {
+            kind: InstallKind::ExistingTauri,
+            tutorial_completed: true,
+            migration_version,
+        },
+        migration_manifest: manifest,
+    }))
+}
+
 pub fn bootstrap(app: &tauri::AppHandle) -> io::Result<BootstrapInstallationResult> {
     let app_directory = app_data_dir(app)?;
     fs::create_dir_all(&app_directory)?;
@@ -275,6 +312,13 @@ pub fn bootstrap(app: &tauri::AppHandle) -> io::Result<BootstrapInstallationResu
     if let Some(existing) =
         existing_installation(&app_directory, &install_state_path, &imported_manifest_path)
     {
+        return Ok(existing);
+    }
+    if let Some(existing) = recover_existing_tauri_installation(
+        &app_directory,
+        &install_state_path,
+        &imported_manifest_path,
+    )? {
         return Ok(existing);
     }
 
@@ -358,7 +402,10 @@ pub fn set_tutorial_completed(app: &tauri::AppHandle, completed: bool) -> io::Re
 
 #[cfg(test)]
 mod tests {
-    use super::{migrate_legacy_payloads, read_valid_manifest, MigrationManifestV1};
+    use super::{
+        migrate_legacy_payloads, read_valid_manifest, recover_existing_tauri_installation,
+        MigrationManifestV1,
+    };
     use crate::import_security::MIGRATION_MANIFEST_LIMIT;
     use serde_json::json;
     use std::fs;
@@ -431,5 +478,25 @@ mod tests {
             fs::read_to_string(target).expect("preserved autosave"),
             r#"{"existing":true}"#
         );
+    }
+
+    #[test]
+    fn existing_tauri_evidence_suppresses_tutorial_after_state_corruption() {
+        let app = tempdir().expect("app directory");
+        let install_state = app.path().join("install-state-v1.json");
+        let imported_manifest = app.path().join("imported-migration-manifest-v1.json");
+        fs::write(
+            app.path().join("autosave.msproj.json"),
+            b"corrupt but existing",
+        )
+        .expect("existing app evidence");
+
+        let recovered =
+            recover_existing_tauri_installation(app.path(), &install_state, &imported_manifest)
+                .expect("recover state")
+                .expect("existing installation");
+
+        assert!(recovered.install_state.tutorial_completed);
+        assert!(install_state.is_file());
     }
 }

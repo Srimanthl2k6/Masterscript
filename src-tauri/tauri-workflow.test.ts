@@ -16,15 +16,24 @@ describe('Tauri release workflows', () => {
   })
 
   it('publishes signed Tauri artifacts only after verification', () => {
-    expect(releaseWorkflow).toContain('tauri-apps/tauri-action@v0')
+    const signingJobStart = releaseWorkflow.indexOf('release-signing:')
+    const publishJobStart = releaseWorkflow.indexOf('publish-release:')
+    const signingJob = releaseWorkflow.slice(signingJobStart, publishJobStart)
+
+    expect(releaseWorkflow).toContain('build-artifacts:')
+    expect(releaseWorkflow).toContain('release-signing:')
+    expect(releaseWorkflow).toContain('environment: release-signing')
     expect(releaseWorkflow).toContain('TAURI_SIGNING_PRIVATE_KEY')
+    expect(signingJob).not.toContain('actions/checkout@')
+    expect(signingJob).not.toContain('npm ')
+    expect(signingJob).not.toContain('cargo ')
+    expect(signingJob).toContain('sha256sum --check')
+    expect(signingJob).toContain('cargo-tauri signer sign')
     expect(releaseWorkflow).toContain('latest.json')
     expect(releaseWorkflow).toContain('latest.yml')
     expect(releaseWorkflow).toContain('latest-mac.yml')
     expect(releaseWorkflow).toContain('latest-linux.yml')
-    expect(releaseWorkflow).toContain('releaseDraft: true')
-    expect(releaseWorkflow).toContain('needs: publish-tauri')
-    expect(releaseWorkflow).toContain('--draft=false')
+    expect(releaseWorkflow).toContain('needs: release-signing')
     expect(releaseWorkflow).toContain('universal-apple-darwin')
     expect(releaseWorkflow).toContain('appimage,deb,rpm')
     expect(releaseWorkflow).toContain('pkg.tar.zst')
@@ -39,9 +48,24 @@ describe('Tauri release workflows', () => {
     expect(workflow).toContain('windows-latest')
     expect(workflow).toContain('macos-latest')
     expect(workflow).toContain('ubuntu-22.04')
-    expect(workflow).toContain('actions/upload-artifact@v4')
+    expect(workflow).toContain('actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a')
+    expect(workflow).not.toContain('TAURI_SIGNING_PRIVATE_KEY')
     expect(workflow).not.toContain('actions/upload-release-asset')
     expect(workflow).not.toContain('softprops/action-gh-release')
+  })
+
+  it('pins every third-party workflow action to a full commit SHA', () => {
+    for (const source of [workflow, releaseWorkflow]) {
+      const actionUses = source
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('uses: '))
+
+      expect(actionUses.length).toBeGreaterThan(0)
+      for (const use of actionUses) {
+        expect(use).toMatch(/^uses:\s+[^@\s]+@[0-9a-f]{40}(?:\s+#.*)?$/)
+      }
+    }
   })
 
   it('tests replacement from the final Electron bridge baseline on every platform', () => {

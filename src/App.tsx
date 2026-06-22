@@ -23,6 +23,10 @@ import {
   parseCollaborationInvite,
   type CollaborationInviteDetails,
 } from './lib/collaboration/collaborationInvite'
+import {
+  isTrustedCollaboration,
+  rememberTrustedCollaboration,
+} from './lib/collaboration/trustedCollaboration'
 import { DESKTOP_DOWNLOAD_LINKS, shouldShowDownloadButton } from './lib/download'
 import { desktopBridge } from './lib/desktop/desktopBridge'
 import { buildMigrationManifestV1 } from './lib/desktop/migration'
@@ -1624,6 +1628,12 @@ function App({ initialInstallState = null }: AppProps) {
       if (!roomId || !inviteKey) {
         return
       }
+      if (!(await isTrustedCollaboration(localStorage, targetProject))) {
+        setStatusMessage(
+          'Collaboration auto-connect skipped. Open Collaboration to approve reconnecting this project.',
+        )
+        return
+      }
 
       const previous = lastAutoConnectRef.current
       if (previous?.projectId === targetProject.id && previous.roomId === roomId) {
@@ -2839,6 +2849,7 @@ function App({ initialInstallState = null }: AppProps) {
   const hostLanCollaboration = async () => {
     try {
       const result = await collaboration.startLanHost(project)
+      await rememberTrustedCollaboration(localStorage, result.project)
       rememberHostedLanRoom(result.sessionInfo.roomId)
       await persistProjectToKnownPath(result.project)
       syncCollaborationPanelFromResult(result)
@@ -2859,6 +2870,7 @@ function App({ initialInstallState = null }: AppProps) {
         invite?.mode === 'lan' ? invite.roomId : collaborationRoomInput,
         invite?.mode === 'lan' ? invite.inviteKey : collaborationInviteInput,
       )
+      await rememberTrustedCollaboration(localStorage, result.project)
       await persistProjectToKnownPath(result.project)
       syncCollaborationPanelFromResult(result)
       setStatusMessage(`Joining LAN session ${result.sessionInfo.roomId}`)
@@ -2882,6 +2894,7 @@ function App({ initialInstallState = null }: AppProps) {
         invite?.roomId ?? collaborationRoomInput,
         invite?.inviteKey,
       )
+      await rememberTrustedCollaboration(localStorage, result.project)
       await persistProjectToKnownPath(result.project)
       syncCollaborationPanelFromResult(result)
       setStatusMessage(`WebRTC collaboration room active: ${result.sessionInfo.roomId}`)
@@ -2905,6 +2918,7 @@ function App({ initialInstallState = null }: AppProps) {
             )
           : await collaboration.startWebRtc(project, invite.roomId, invite.inviteKey)
 
+      await rememberTrustedCollaboration(localStorage, result.project)
       await persistProjectToKnownPath(result.project)
       syncCollaborationPanelFromResult(result)
       setStatusMessage(`Collaboration invite applied: ${result.sessionInfo.roomId}`)
@@ -2942,6 +2956,7 @@ function App({ initialInstallState = null }: AppProps) {
         onStatus: setCollaborationJoinStatus,
       })
       const hydrated = hydrateProject(result.project)
+      await rememberTrustedCollaboration(localStorage, hydrated)
       setCollaborationJoinStatus('Project synced. Choose where to save it.')
 
       let nextSavedPath = `${hydrated.meta.title || 'untitled'}.msproj.json`
@@ -4879,7 +4894,7 @@ function App({ initialInstallState = null }: AppProps) {
       if (
         active &&
         !tutorialAutoStartedRef.current &&
-        shouldOpenTutorialAutomatically(installState)
+        shouldOpenTutorialAutomatically(installState, desktopBridge.runtime)
       ) {
         tutorialAutoStartedRef.current = true
         tutorialIsManualRef.current = false

@@ -7,6 +7,7 @@ import {
 } from './collaborationInvite'
 import { DEFAULT_RTC_CONFIGURATION, DEFAULT_SIGNALING_SERVERS } from './collaborationConfig'
 import type { ScriptProject } from '../../types/screenplay'
+import { validateProjectCandidate } from '../adapters/importLimits'
 import { desktopBridge } from '../desktop/desktopBridge'
 
 export type CollaborationStatus =
@@ -77,7 +78,12 @@ type Provider =
 type Persistence = {
   whenSynced: Promise<unknown>
   destroy: () => Promise<void>
+  clearData?: () => Promise<void>
 }
+
+export const validateRemoteCollaborationProject = (
+  project: ScriptProject,
+): ScriptProject => validateProjectCandidate(project)
 
 const createWebRtcRoomId = (project: ScriptProject): string => {
   const suffix =
@@ -198,12 +204,19 @@ export const useCollaborationSession = ({
     }
   }, [autosaveProject])
 
-  const destroyProvider = useCallback(async () => {
+  const destroyProvider = useCallback(async (clearPersistedState = false) => {
     providerRef.current?.disconnect()
     providerRef.current?.destroy?.()
     providerRef.current = null
-    await persistenceRef.current?.destroy()
+    const persistence = persistenceRef.current
     persistenceRef.current = null
+    if (persistence) {
+      if (clearPersistedState && persistence.clearData) {
+        await persistence.clearData()
+      } else {
+        await persistence.destroy()
+      }
+    }
     documentCleanupRef.current?.()
     documentCleanupRef.current = null
   }, [])
@@ -254,13 +267,27 @@ export const useCollaborationSession = ({
           return
         }
 
-        onRemoteProject(projectYjs.yDocToScriptProject(ydoc))
+        try {
+          const remoteProject = validateRemoteCollaborationProject(
+            projectYjs.yDocToScriptProject(ydoc),
+          )
+          onRemoteProject(remoteProject)
+        } catch {
+          remoteUpdatesPausedRef.current = true
+          setStatus('disconnected')
+          void destroyProvider(true).finally(() => {
+            if (ydocRef.current === ydoc) {
+              ydoc.destroy()
+              ydocRef.current = null
+            }
+          })
+        }
       }
 
       ydoc.on('update', onUpdate)
       documentCleanupRef.current = () => ydoc.off('update', onUpdate)
     },
-    [onRemoteProject],
+    [destroyProvider, onRemoteProject],
   )
 
   const bindProviderStatus = useCallback(
@@ -390,6 +417,9 @@ export const useCollaborationSession = ({
       options: CollaborationStartOptions = {},
     ): Promise<CollaborationStartResult> => {
       void options
+      if (desktopBridge.runtime === 'web') {
+        throw new Error('LAN collaboration is available only in the desktop app.')
+      }
       await stop()
       const normalizedRoomId = roomId.trim()
       const normalizedServerUrl = serverUrl.trim()
@@ -397,14 +427,12 @@ export const useCollaborationSession = ({
         throw new Error('LAN server URL and room ID are required.')
       }
 
-      if (desktopBridge.runtime !== 'web') {
-        const result = await desktopBridge.joinLanCollaboration({
-          serverUrl: normalizedServerUrl,
-          roomId: normalizedRoomId,
-        })
-        if (!result.ok) {
-          throw new Error(result.error ?? 'LAN collaboration join details were invalid.')
-        }
+      const result = await desktopBridge.joinLanCollaboration({
+        serverUrl: normalizedServerUrl,
+        roomId: normalizedRoomId,
+      })
+      if (!result.ok) {
+        throw new Error(result.error ?? 'LAN collaboration join details were invalid.')
       }
 
       const resolved = await resolveCollaborationDetails(project, 'lan', {
@@ -492,6 +520,9 @@ export const useCollaborationSession = ({
       await stop({ flush: false })
       options.onStatus?.('Bootstrapping collaboration project...')
       const details = parseCollaborationInvite(invite)
+      if (details.mode === 'lan' && desktopBridge.runtime === 'web') {
+        throw new Error('LAN collaboration is available only in the desktop app.')
+      }
       if (details.mode === 'lan') {
         await (
           await import('./encryptedLanProvider')

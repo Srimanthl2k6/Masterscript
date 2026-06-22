@@ -47,6 +47,7 @@ export interface LanSessionKeys {
 
 const textEncoder = new TextEncoder()
 const LAN_PROTOCOL_VERSION = 2
+const MIN_SYNC_RESPONSE_INTERVAL_MS = 2_000
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
   const buffer = new ArrayBuffer(bytes.byteLength)
@@ -232,6 +233,7 @@ export class EncryptedLanProvider {
   private shouldConnect = true
   private reconnectTimer: ReturnType<typeof globalThis.setTimeout> | null = null
   private status: LanProviderStatus = 'connecting'
+  private lastSyncResponseAt = 0
 
   constructor(options: EncryptedLanProviderOptions) {
     this.roomId = options.roomId
@@ -397,6 +399,11 @@ export class EncryptedLanProvider {
     }
 
     if (isSyncRequest(parsed)) {
+      const now = Date.now()
+      if (now - this.lastSyncResponseAt < MIN_SYNC_RESPONSE_INTERVAL_MS) {
+        return
+      }
+      this.lastSyncResponseAt = now
       await this.sendState()
       return
     }

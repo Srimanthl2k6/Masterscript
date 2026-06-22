@@ -1,8 +1,8 @@
 use crate::file_grants::FileGrantRegistry;
 use crate::import_security::{
     read_file_bounded, read_json_value_bounded, read_project_file, validate_docx_archive,
-    validate_project_value, validate_serialized_size, DOCX_COMPRESSED_LIMIT, PROJECT_JSON_LIMIT,
-    TEXT_IMPORT_LIMIT,
+    validate_project_value, validate_serialized_size, DOCX_COMPRESSED_LIMIT, EXPORT_BINARY_LIMIT,
+    EXPORT_TEXT_LIMIT, MAX_BASE64_EXPORT_BYTES, PROJECT_JSON_LIMIT, TEXT_IMPORT_LIMIT,
 };
 use crate::lan::{self, LanRelayState, LanTransportState};
 use crate::legacy::InstallState;
@@ -140,6 +140,9 @@ async fn export_text(
     default_name: String,
     content: String,
 ) -> OperationResult {
+    if content.len() > EXPORT_TEXT_LIMIT {
+        return OperationResult::failure("Text export exceeds the 20 MiB limit");
+    }
     let selected = rfd::AsyncFileDialog::new()
         .set_title(dialog_title)
         .set_file_name(&default_name)
@@ -156,6 +159,23 @@ async fn export_text(
     }
 }
 
+fn decode_export_payload_with_limit(base64: &str, limit: usize) -> Result<Vec<u8>, String> {
+    let encoded_limit = ((limit + 2) / 3) * 4;
+    if base64.len() > encoded_limit {
+        return Err("Binary export exceeds the 100 MiB limit".into());
+    }
+    let bytes = STANDARD.decode(base64).map_err(|error| error.to_string())?;
+    if bytes.len() > limit {
+        return Err("Binary export exceeds the 100 MiB limit".into());
+    }
+    Ok(bytes)
+}
+
+fn decode_export_payload(base64: &str) -> Result<Vec<u8>, String> {
+    debug_assert_eq!(MAX_BASE64_EXPORT_BYTES, ((EXPORT_BINARY_LIMIT + 2) / 3) * 4);
+    decode_export_payload_with_limit(base64, EXPORT_BINARY_LIMIT)
+}
+
 async fn export_binary(
     dialog_title: &str,
     filter_name: &str,
@@ -163,9 +183,9 @@ async fn export_binary(
     default_name: String,
     base64: String,
 ) -> OperationResult {
-    let bytes = match STANDARD.decode(base64) {
+    let bytes = match decode_export_payload(&base64) {
         Ok(bytes) => bytes,
-        Err(error) => return OperationResult::failure(error.to_string()),
+        Err(error) => return OperationResult::failure(error),
     };
     let selected = rfd::AsyncFileDialog::new()
         .set_title(dialog_title)
@@ -566,4 +586,22 @@ pub fn installation_set_tutorial_completed(
     completed: bool,
 ) -> Result<(), String> {
     migration::set_tutorial_completed(&app, completed).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_export_payload_with_limit;
+    use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
+
+    #[test]
+    fn rejects_binary_exports_above_the_decoded_and_encoded_limits() {
+        assert!(decode_export_payload_with_limit(&"A".repeat(9), 3).is_err());
+        let oversized = STANDARD.encode(vec![0_u8; 4]);
+        assert!(decode_export_payload_with_limit(&oversized, 3).is_err());
+        assert_eq!(
+            decode_export_payload_with_limit(&STANDARD.encode(b"ok"), 3).expect("valid payload"),
+            b"ok"
+        );
+    }
 }

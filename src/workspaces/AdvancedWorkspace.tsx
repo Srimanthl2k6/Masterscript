@@ -20,6 +20,7 @@ import {
   technicalElementTemplates,
   updateAdvancedSettings,
 } from '../lib/advancedMasterScript'
+import { openExternalUrl } from '../lib/externalNavigation'
 import type {
   CastStatus,
   ScriptFormatId,
@@ -264,15 +265,13 @@ const AdvancedWorkspace = ({
           <div className="inline-actions">
             <button
               title={legalWorkflowLinks.poorMansCopyrightTooltip}
-              onClick={() => window.open(legalWorkflowLinks.wgaUrl, '_blank')}
+              onClick={() => openExternalUrl(legalWorkflowLinks.wgaUrl)}
             >
               Register with WGA
             </button>
             <button
               title={legalWorkflowLinks.poorMansCopyrightTooltip}
-              onClick={() =>
-                window.open(legalWorkflowLinks.copyrightUrl, '_blank')
-              }
+              onClick={() => openExternalUrl(legalWorkflowLinks.copyrightUrl)}
             >
               Register Copyright
             </button>

@@ -23,6 +23,7 @@ import type {
 
 class InMemoryRustTransport implements LanTransportClient {
   readonly closedSessions: string[] = []
+  readonly sentPayloads: string[] = []
   private readonly transformPayload: (payload: string) => string
   private nextSession = 0
   private readonly sessions = new Map<
@@ -50,6 +51,7 @@ class InMemoryRustTransport implements LanTransportClient {
     sessionId: string,
     payload: string,
   ): Promise<OperationResult> {
+    this.sentPayloads.push(payload)
     const source = this.sessions.get(sessionId)
     if (!source) {
       return { ok: false, error: 'missing session' }
@@ -73,6 +75,12 @@ class InMemoryRustTransport implements LanTransportClient {
     this.closedSessions.push(sessionId)
     this.sessions.delete(sessionId)
     return { ok: true }
+  }
+
+  emit(payload: string) {
+    for (const session of this.sessions.values()) {
+      session.onEvent({ eventType: 'message', payload })
+    }
   }
 }
 
@@ -196,5 +204,28 @@ describe('LAN collaboration protocol v2', () => {
     guest.destroy()
     hostDoc.destroy()
     guestDoc.destroy()
+  })
+
+  it('rate limits authenticated sync requests to prevent state amplification', async () => {
+    const project = createBenchmarkProject(1)
+    const transportClient = new InMemoryRustTransport()
+    const ydoc = scriptProjectToYDoc(project)
+    const provider = new EncryptedLanProvider({
+      roomId: createLanRoomId(),
+      serverUrl: 'ws://127.0.0.1:3210',
+      ydoc,
+      inviteCode: createInviteCode().inviteCode,
+      publishInitialState: false,
+      transportClient,
+    })
+    await waitUntil(() => provider.currentStatus === 'connected')
+
+    transportClient.emit('{"type":"sync-request","version":2}')
+    transportClient.emit('{"type":"sync-request","version":2}')
+    await waitUntil(() => transportClient.sentPayloads.length > 0)
+
+    expect(transportClient.sentPayloads).toHaveLength(1)
+    provider.destroy()
+    ydoc.destroy()
   })
 })

@@ -2485,9 +2485,9 @@ kbd {
   right: 24px;
   width: min(380px, calc(100vw - 32px));
   padding: 20px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--border-strong);
   border-radius: 14px;
-  background: var(--panel);
+  background: var(--bg-panel);
   box-shadow: 0 20px 60px rgb(0 0 0 / 38%);
   pointer-events: auto;
 }

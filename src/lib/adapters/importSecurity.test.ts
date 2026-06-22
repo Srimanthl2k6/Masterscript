@@ -66,6 +66,14 @@ describe('bounded import conversion', () => {
       (_, index) => createBlock('action', `line ${index}`),
     )
     expect(() => validateProjectCandidate(project)).toThrow(/50,000 blocks/i)
+
+    const malformedBlockProject = createEmptyProject()
+    ;(malformedBlockProject.blocks[0] as unknown as { text: unknown }).text = {
+      injected: true,
+    }
+    expect(() => validateProjectCandidate(malformedBlockProject)).toThrow(
+      /block fields/i,
+    )
   })
 
   it('rejects project structures with excessive non-text values', () => {

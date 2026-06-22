@@ -12,10 +12,19 @@ export interface CollaborationInviteDetails {
 
 const COLLABORATION_PROTOCOL = 'masterscript:'
 const COLLABORATION_HOST = 'collab'
+const MAX_ROOM_ID_LENGTH = 256
+const MAX_INVITE_KEY_LENGTH = 1024
+const MAX_SERVER_URL_LENGTH = 2048
+const LAN_ROOM_ID_PATTERN = /^ms2-[A-Za-z0-9_-]{22}$/
+const LAN_INVITE_KEY_PATTERN =
+  /^[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{22}$/
 
 const trimValue = (value: string | undefined): string => value?.trim() ?? ''
 
 const assertLanServerUrl = (value: string) => {
+  if (value.length > MAX_SERVER_URL_LENGTH) {
+    throw new Error('LAN invite server URL is too long')
+  }
   try {
     const parsed = new URL(value)
     if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
@@ -29,15 +38,37 @@ const assertLanServerUrl = (value: string) => {
   }
 }
 
-export const buildCollaborationInvite = (details: CollaborationInviteDetails): string => {
-  const roomId = trimValue(details.roomId)
-  const inviteKey = trimValue(details.inviteKey)
+const assertCollaborationIdentifiers = (
+  mode: CollaborationProjectMode,
+  roomId: string,
+  inviteKey: string,
+) => {
   if (!roomId) {
     throw new Error('Invite is missing a room ID')
+  }
+  if (roomId.length > MAX_ROOM_ID_LENGTH) {
+    throw new Error('Invite room ID is too long')
   }
   if (!inviteKey) {
     throw new Error('Invite is missing an invite key')
   }
+  if (inviteKey.length > MAX_INVITE_KEY_LENGTH) {
+    throw new Error('Invite key is too long')
+  }
+  if (mode === 'lan') {
+    if (!LAN_ROOM_ID_PATTERN.test(roomId)) {
+      throw new Error('LAN invite must use a 128-bit protocol v2 room ID')
+    }
+    if (!LAN_INVITE_KEY_PATTERN.test(inviteKey)) {
+      throw new Error('LAN invite key is invalid')
+    }
+  }
+}
+
+export const buildCollaborationInvite = (details: CollaborationInviteDetails): string => {
+  const roomId = trimValue(details.roomId)
+  const inviteKey = trimValue(details.inviteKey)
+  assertCollaborationIdentifiers(details.mode, roomId, inviteKey)
 
   const params = new URLSearchParams()
   params.set('mode', details.mode)
@@ -81,12 +112,7 @@ export const parseCollaborationInvite = (value: string): CollaborationInviteDeta
 
   const roomId = trimValue(parsed.searchParams.get('room') ?? undefined)
   const inviteKey = trimValue(parsed.searchParams.get('key') ?? undefined)
-  if (!roomId) {
-    throw new Error('Invite is missing a room ID')
-  }
-  if (!inviteKey) {
-    throw new Error('Invite is missing an invite key')
-  }
+  assertCollaborationIdentifiers(mode, roomId, inviteKey)
 
   if (mode === 'lan') {
     if (parsed.searchParams.get('v') !== '2') {
@@ -107,14 +133,27 @@ export const parseCollaborationInvite = (value: string): CollaborationInviteDeta
 
 export const hasCollaborationMeta = (project: ScriptProject): boolean => {
   const mode = project.meta.collaborationMode ?? 'webrtc'
-  return Boolean(
-    project.meta.collaborationRoomId?.trim() &&
-      project.meta.collaborationInviteKey?.trim() &&
-      (mode === 'webrtc' || mode === 'lan') &&
-      (mode === 'webrtc' ||
-        (project.meta.collaborationLanServerUrl?.trim() &&
-          project.meta.collaborationLanProtocolVersion === 2)),
-  )
+  const roomId = project.meta.collaborationRoomId?.trim() ?? ''
+  const inviteKey = project.meta.collaborationInviteKey?.trim() ?? ''
+  if (mode !== 'webrtc' && mode !== 'lan') {
+    return false
+  }
+  try {
+    assertCollaborationIdentifiers(mode, roomId, inviteKey)
+    if (mode === 'lan') {
+      const serverUrl = project.meta.collaborationLanServerUrl?.trim() ?? ''
+      if (
+        project.meta.collaborationLanProtocolVersion !== 2 ||
+        !serverUrl
+      ) {
+        return false
+      }
+      assertLanServerUrl(serverUrl)
+    }
+    return true
+  } catch {
+    return false
+  }
 }
 
 export const applyCollaborationMeta = (

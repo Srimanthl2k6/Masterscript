@@ -73,10 +73,31 @@ describe('workspace chrome UI', () => {
     expect(appSource).toContain('handleFindInputKeyDown(event, jumpToNextFindMatch)')
   })
 
+  it('keeps tutorial instructions opaque and captures Enter before focused controls', () => {
+    const tutorialSource = readFileSync(
+      'src/components/GuidedTutorial.tsx',
+      'utf8',
+    )
+
+    expect(stylesheet).toMatch(
+      /\.tutorial-card\s*{[^}]*background:\s*var\(--bg-panel\);/s,
+    )
+    expect(stylesheet).not.toContain('background: var(--panel);')
+    expect(tutorialSource).toContain(
+      "window.addEventListener('keydown', onKeyDown, true)",
+    )
+    expect(tutorialSource).toContain('event.stopPropagation()')
+  })
+
   it('renders relationship removal through the normal undoable commit path', () => {
     expect(appSource).toContain('const removeSelectedCharacterRelationship')
     expect(appSource).toContain('removeCharacterRelationship(draft, relationshipId)')
     expect(appSource).toContain('onClick={() => removeSelectedCharacterRelationship(edge.id)}')
     expect(appSource).toContain('Remove')
+  })
+
+  it('auto-reconnects only collaboration details previously approved on this device', () => {
+    expect(appSource).toContain('await isTrustedCollaboration(localStorage, targetProject)')
+    expect(appSource).toContain('await rememberTrustedCollaboration(localStorage, result.project)')
   })
 })

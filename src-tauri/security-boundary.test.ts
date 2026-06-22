@@ -9,9 +9,13 @@ const capability = JSON.parse(
 )
 const buildScript = readFileSync('src-tauri/build.rs', 'utf8')
 const rustCommands = readFileSync('src-tauri/src/commands.rs', 'utf8')
+const rustLan = readFileSync('src-tauri/src/lan.rs', 'utf8')
 const tauriBridge = readFileSync('src/lib/desktop/tauriBridge.ts', 'utf8')
 const css = readFileSync('src/index.css', 'utf8')
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
+const indexHtml = readFileSync('index.html', 'utf8')
+const viteConfig = readFileSync('vite.config.ts', 'utf8')
+const vercelConfig = JSON.parse(readFileSync('vercel.json', 'utf8'))
 
 const desktopCommands = [
   'project_autosave',
@@ -116,5 +120,42 @@ describe('Pass 2 webview and IPC security boundary', () => {
     expect(tauriBridge).not.toContain('project_save_path')
     expect(tauriBridge).not.toContain('project_open_path')
     expect(tauriBridge).not.toContain('filePath')
+  })
+
+  it('applies a restrictive CSP and security headers to the production website', () => {
+    expect(indexHtml).not.toContain('http-equiv="Content-Security-Policy"')
+    expect(viteConfig).toContain('productionSecurityPolicy')
+    const headers = vercelConfig.headers[0].headers as Array<{
+      key: string
+      value: string
+    }>
+    const headerMap = Object.fromEntries(
+      headers.map(({ key, value }) => [key, value]),
+    )
+    expect(headerMap['Content-Security-Policy']).toContain(
+      "script-src 'self'",
+    )
+    expect(headerMap['Content-Security-Policy']).toContain(
+      "frame-ancestors 'none'",
+    )
+    expect(headerMap['X-Content-Type-Options']).toBe('nosniff')
+    expect(headerMap['X-Frame-Options']).toBe('DENY')
+  })
+
+  it('bounds text and binary export payloads before allocation and file writes', () => {
+    expect(rustCommands).toContain('EXPORT_TEXT_LIMIT')
+    expect(rustCommands).toContain('EXPORT_BINARY_LIMIT')
+    expect(rustCommands).toContain('MAX_BASE64_EXPORT_BYTES')
+    expect(rustCommands).toContain('base64.len() > encoded_limit')
+    expect(rustCommands).toContain('bytes.len() > limit')
+    expect(rustCommands).toContain(
+      'decode_export_payload_with_limit(base64, EXPORT_BINARY_LIMIT)',
+    )
+  })
+
+  it('bounds LAN room identifiers and concurrent client transports', () => {
+    expect(rustLan).toContain('MAX_TRANSPORT_SESSIONS')
+    expect(rustLan).toContain('validate_room_id')
+    expect(rustLan).toContain('try_acquire_owned')
   })
 })
