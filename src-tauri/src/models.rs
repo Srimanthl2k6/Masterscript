@@ -97,6 +97,7 @@ pub struct BinaryImportResult {
 #[serde(rename_all = "camelCase")]
 pub struct LanHostOptions {
     pub room_id: Option<String>,
+    pub auth_key: String,
     pub port: Option<u16>,
 }
 
@@ -148,4 +149,68 @@ pub struct LanJoinResult {
     pub room_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LanTransportOpenOptions {
+    pub server_url: String,
+    pub room_id: String,
+    pub auth_key: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LanTransportOpenResult {
+    pub ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl LanTransportOpenResult {
+    pub fn success(session_id: String) -> Self {
+        Self {
+            ok: true,
+            session_id: Some(session_id),
+            error: None,
+        }
+    }
+
+    pub fn failure(error: impl Into<String>) -> Self {
+        Self {
+            ok: false,
+            session_id: None,
+            error: Some(error.into()),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LanTransportEvent {
+    pub event_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payload: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl LanTransportEvent {
+    pub fn message(payload: String) -> Self {
+        Self {
+            event_type: "message".into(),
+            payload: Some(payload),
+            error: None,
+        }
+    }
+
+    pub fn disconnected(error: Option<String>) -> Self {
+        Self {
+            event_type: "disconnected".into(),
+            payload: None,
+            error,
+        }
+    }
 }

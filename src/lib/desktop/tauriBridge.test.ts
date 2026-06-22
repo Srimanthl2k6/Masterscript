@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ScriptProject } from '../../types/screenplay'
 import {
   createTauriDesktopBridge,
+  type TauriChannelFactory,
   type TauriInvoker,
 } from './tauriBridge'
 
@@ -76,13 +77,35 @@ describe('createTauriDesktopBridge', () => {
       }
       return { ok: true }
     })
-    const bridge = createTauriDesktopBridge(invoke as unknown as TauriInvoker)
+    const channelFactory = vi.fn((onMessage: (event: unknown) => void) => ({
+      onmessage: onMessage,
+      channel: 'fake',
+    }))
+    const bridge = createTauriDesktopBridge(
+      invoke as unknown as TauriInvoker,
+      channelFactory as TauriChannelFactory,
+    )
 
-    await bridge.hostLanCollaboration({ roomId: 'room-a', port: 0 })
+    await bridge.hostLanCollaboration({
+      roomId: 'room-a',
+      authKey: 'auth-key',
+      port: 0,
+    })
     await bridge.joinLanCollaboration({
       serverUrl: 'ws://127.0.0.1:4567',
       roomId: 'room-a',
     })
+    const onMessage = vi.fn()
+    await bridge.openLanTransport(
+      {
+        serverUrl: 'ws://127.0.0.1:4567',
+        roomId: 'room-a',
+        authKey: 'auth-key',
+      },
+      onMessage,
+    )
+    await bridge.sendLanTransport('session-a', '{"type":"state"}')
+    await bridge.closeLanTransport('session-a')
     await bridge.getLanCollaborationStatus()
     await bridge.stopLanCollaboration()
     await bridge.bootstrapInstallation()
@@ -92,11 +115,23 @@ describe('createTauriDesktopBridge', () => {
     expect(invoke.mock.calls.map(([command]) => command)).toEqual([
       'collaboration_lan_host',
       'collaboration_lan_join',
+      'collaboration_lan_transport_open',
+      'collaboration_lan_transport_send',
+      'collaboration_lan_transport_close',
       'collaboration_lan_status',
       'collaboration_lan_stop',
       'bootstrap_installation',
       'installation_get_state',
       'installation_set_tutorial_completed',
     ])
+    expect(channelFactory).toHaveBeenCalledWith(onMessage)
+    expect(invoke).toHaveBeenCalledWith('collaboration_lan_transport_open', {
+      options: {
+        serverUrl: 'ws://127.0.0.1:4567',
+        roomId: 'room-a',
+        authKey: 'auth-key',
+      },
+      onEvent: expect.objectContaining({ channel: 'fake' }),
+    })
   })
 })

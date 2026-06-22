@@ -9,6 +9,9 @@ import type {
   LanCollaborationJoinOptions,
   LanCollaborationJoinResult,
   LanCollaborationStatusResult,
+  LanTransportEvent,
+  LanTransportOpenOptions,
+  LanTransportOpenResult,
   OpenProjectResult,
   OperationResult,
   TextImportResult,
@@ -19,8 +22,20 @@ export type TauriInvoker = <T>(
   args?: Record<string, unknown>,
 ) => Promise<T>
 
+export type TauriChannelFactory = <T>(
+  onMessage: (message: T) => void,
+) => unknown | Promise<unknown>
+
+const createRuntimeChannel: TauriChannelFactory = async <T>(
+  onMessage: (message: T) => void,
+) => {
+  const { Channel } = await import('@tauri-apps/api/core')
+  return new Channel<T>(onMessage)
+}
+
 export const createTauriDesktopBridge = (
   invoke: TauriInvoker,
+  createChannel: TauriChannelFactory = createRuntimeChannel,
 ): DesktopBridge => ({
   runtime: 'tauri',
   autosave: (project: ScriptProject) =>
@@ -53,6 +68,23 @@ export const createTauriDesktopBridge = (
     invoke<LanCollaborationHostResult>('collaboration_lan_host', { options }),
   joinLanCollaboration: (options: LanCollaborationJoinOptions) =>
     invoke<LanCollaborationJoinResult>('collaboration_lan_join', { options }),
+  openLanTransport: async (
+    options: LanTransportOpenOptions,
+    onEvent: (event: LanTransportEvent) => void,
+  ) => {
+    const onEventChannel = await createChannel(onEvent)
+    return invoke<LanTransportOpenResult>('collaboration_lan_transport_open', {
+      options,
+      onEvent: onEventChannel,
+    })
+  },
+  sendLanTransport: (sessionId, payload) =>
+    invoke<OperationResult>('collaboration_lan_transport_send', {
+      sessionId,
+      payload,
+    }),
+  closeLanTransport: (sessionId) =>
+    invoke<OperationResult>('collaboration_lan_transport_close', { sessionId }),
   stopLanCollaboration: () =>
     invoke<{ ok: boolean; error?: string }>('collaboration_lan_stop'),
   getLanCollaborationStatus: () =>

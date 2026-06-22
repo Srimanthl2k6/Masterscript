@@ -94,6 +94,9 @@ const createNonElectronBridge = (runtime: 'web' | 'tauri'): DesktopBridge => ({
   exportPdf: unavailable,
   hostLanCollaboration: async () => ({ ok: false, error: unavailableMessage }),
   joinLanCollaboration: async () => ({ ok: false, error: unavailableMessage }),
+  openLanTransport: async () => ({ ok: false, error: unavailableMessage }),
+  sendLanTransport: unavailable,
+  closeLanTransport: unavailable,
   stopLanCollaboration: async () => ({ ok: false, error: unavailableMessage }),
   getLanCollaborationStatus: async () => ({
     ok: false,
@@ -142,6 +145,9 @@ const createElectronBridge = (api: DesktopNativeApi): DesktopBridge => ({
   exportPdf: (title, base64) => api.exportPdf(title, base64),
   hostLanCollaboration: (options) => api.hostLanCollaboration(options),
   joinLanCollaboration: (options) => api.joinLanCollaboration(options),
+  openLanTransport: async () => ({ ok: false, error: unavailableMessage }),
+  sendLanTransport: unavailable,
+  closeLanTransport: unavailable,
   stopLanCollaboration: () => api.stopLanCollaboration(),
   getLanCollaborationStatus: () => api.getLanCollaborationStatus(),
   exportMigrationManifest: (manifest: MigrationManifestV1) =>

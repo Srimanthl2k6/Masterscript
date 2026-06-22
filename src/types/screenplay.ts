@@ -493,6 +493,7 @@ export interface ScriptProjectMeta {
   collaborationInviteKey?: string
   collaborationMode?: 'webrtc' | 'lan'
   collaborationLanServerUrl?: string
+  collaborationLanProtocolVersion?: 2
 }
 
 export interface RevisionSnapshot {

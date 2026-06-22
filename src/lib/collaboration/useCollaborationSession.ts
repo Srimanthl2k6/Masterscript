@@ -79,7 +79,7 @@ type Persistence = {
   destroy: () => Promise<void>
 }
 
-const createRoomId = (project: ScriptProject): string => {
+const createWebRtcRoomId = (project: ScriptProject): string => {
   const suffix =
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID().slice(0, 8)
@@ -95,25 +95,41 @@ const collaborationMetaMatches = (
   project.meta.collaborationRoomId === details.roomId &&
   project.meta.collaborationInviteKey === details.inviteKey &&
   (details.mode === 'webrtc' ||
-    project.meta.collaborationLanServerUrl === details.lanServerUrl)
+    (project.meta.collaborationLanServerUrl === details.lanServerUrl &&
+      project.meta.collaborationLanProtocolVersion === details.protocolVersion))
 
 const resolveCollaborationDetails = async (
   project: ScriptProject,
   mode: CollaborationProjectMode,
   explicit: Partial<CollaborationInviteDetails> = {},
 ): Promise<{ details: CollaborationInviteDetails; project: ScriptProject }> => {
-  const roomId =
+  const canReusePersistedLanDetails =
+    mode !== 'lan' || project.meta.collaborationLanProtocolVersion === 2
+  let roomId =
     explicit.roomId?.trim() ||
-    project.meta.collaborationRoomId?.trim() ||
-    createRoomId(project)
+    (canReusePersistedLanDetails
+      ? project.meta.collaborationRoomId?.trim()
+      : undefined)
+  if (!roomId) {
+    roomId =
+      mode === 'lan'
+        ? (await import('./encryptedLanProvider')).createLanRoomId()
+        : createWebRtcRoomId(project)
+  }
   let inviteKey =
-    explicit.inviteKey?.trim() || project.meta.collaborationInviteKey?.trim()
+    explicit.inviteKey?.trim() ||
+    (canReusePersistedLanDetails
+      ? project.meta.collaborationInviteKey?.trim()
+      : undefined)
   if (!inviteKey) {
     const { createInviteCode } = await import('./encryptedLanProvider')
     inviteKey = createInviteCode().inviteCode
   }
   const lanServerUrl =
-    explicit.lanServerUrl?.trim() || project.meta.collaborationLanServerUrl?.trim()
+    explicit.lanServerUrl?.trim() ||
+    (canReusePersistedLanDetails
+      ? project.meta.collaborationLanServerUrl?.trim()
+      : undefined)
   const details: CollaborationInviteDetails =
     mode === 'lan'
       ? {
@@ -121,6 +137,7 @@ const resolveCollaborationDetails = async (
           roomId,
           inviteKey,
           lanServerUrl,
+          protocolVersion: 2,
         }
       : {
           mode,
@@ -312,8 +329,12 @@ export const useCollaborationSession = ({
 
       await stop()
       const initial = await resolveCollaborationDetails(project, 'lan')
+      const { authKey } = await (
+        await import('./encryptedLanProvider')
+      ).deriveLanSessionKeys(initial.details.inviteKey, initial.details.roomId)
       const hostResult = (await desktopBridge.hostLanCollaboration({
         roomId: initial.details.roomId,
+        authKey,
       })) as LanHostResult
       if (!hostResult.ok || !hostResult.primaryHostUrl || !hostResult.roomId) {
         throw new Error(hostResult.error ?? 'Could not start LAN collaboration host.')
@@ -324,26 +345,25 @@ export const useCollaborationSession = ({
         roomId: hostResult.roomId,
         inviteKey: initial.details.inviteKey,
         lanServerUrl: hostResult.primaryHostUrl,
+        protocolVersion: 2,
       }
       const updatedProject = collaborationMetaMatches(initial.project, details)
         ? initial.project
         : applyCollaborationMeta(initial.project, details)
       await persistResolvedProject(updatedProject)
 
-      const [{ EncryptedLanProvider, parseInviteCode }, { scriptProjectToYDoc }] =
+      const [{ EncryptedLanProvider }, { scriptProjectToYDoc }] =
         await Promise.all([
           import('./encryptedLanProvider'),
           import('./projectYjs'),
         ])
-      const { secret, salt } = parseInviteCode(details.inviteKey)
       const ydoc = scriptProjectToYDoc(updatedProject)
       await attachDocument(ydoc, details.roomId)
       const provider = new EncryptedLanProvider({
         roomId: details.roomId,
         serverUrl: details.lanServerUrl ?? hostResult.primaryHostUrl,
         ydoc,
-        secret,
-        salt,
+        inviteCode: details.inviteKey,
         publishInitialState: true,
       })
       providerRef.current = provider
@@ -392,25 +412,27 @@ export const useCollaborationSession = ({
         roomId: normalizedRoomId,
         inviteKey: inviteCode,
         lanServerUrl: normalizedServerUrl,
+        protocolVersion: 2,
       })
       const details = resolved.details
       const updatedProject = resolved.project
+      await (
+        await import('./encryptedLanProvider')
+      ).deriveLanSessionKeys(details.inviteKey, details.roomId)
       await persistResolvedProject(updatedProject)
 
-      const [{ EncryptedLanProvider, parseInviteCode }, { scriptProjectToYDoc }] =
+      const [{ EncryptedLanProvider }, { scriptProjectToYDoc }] =
         await Promise.all([
           import('./encryptedLanProvider'),
           import('./projectYjs'),
         ])
-      const { secret, salt } = parseInviteCode(details.inviteKey)
       const ydoc = scriptProjectToYDoc(updatedProject)
       await attachDocument(ydoc, details.roomId)
       const provider = new EncryptedLanProvider({
         roomId: details.roomId,
         serverUrl: normalizedServerUrl,
         ydoc,
-        secret,
-        salt,
+        inviteCode: details.inviteKey,
         publishInitialState: false,
       })
       providerRef.current = provider
@@ -470,6 +492,11 @@ export const useCollaborationSession = ({
       await stop({ flush: false })
       options.onStatus?.('Bootstrapping collaboration project...')
       const details = parseCollaborationInvite(invite)
+      if (details.mode === 'lan') {
+        await (
+          await import('./encryptedLanProvider')
+        ).deriveLanSessionKeys(details.inviteKey, details.roomId)
+      }
       const [{ Doc }, { waitForRenderableProject }, projectYjs] =
         await Promise.all([
           import('yjs'),
@@ -484,16 +511,14 @@ export const useCollaborationSession = ({
         if (!details.lanServerUrl) {
           throw new Error('LAN invite is missing a server URL')
         }
-        const { EncryptedLanProvider, parseInviteCode } = await import(
+        const { EncryptedLanProvider } = await import(
           './encryptedLanProvider'
         )
-        const { secret, salt } = parseInviteCode(details.inviteKey)
         provider = new EncryptedLanProvider({
           roomId: details.roomId,
           serverUrl: details.lanServerUrl,
           ydoc,
-          secret,
-          salt,
+          inviteCode: details.inviteKey,
           publishInitialState: false,
         })
       } else {

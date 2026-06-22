@@ -17,13 +17,16 @@ tauri-build = { version = "2.6.3", features = [] }
 [dependencies]
 base64 = "0.22.1"
 futures-util = "0.3.32"
+hmac = "0.12.1"
 local-ip-address = "0.6.13"
+rand = "0.8.5"
 rfd = "0.17.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+sha2 = "0.10.9"
 tauri = { version = "2.11.3", features = [] }
 tempfile = "3.27.0"
-tokio = { version = "1.52.0", features = ["fs", "macros", "net", "rt-multi-thread", "sync"] }
+tokio = { version = "1.52.0", features = ["fs", "macros", "net", "rt-multi-thread", "sync", "time"] }
 tokio-tungstenite = "0.29.0"
 url = "2.5.8"
 urlencoding = "2.1.3"

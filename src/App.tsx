@@ -433,6 +433,10 @@ const buildProjectCollaborationInvite = (project: ScriptProject): string => {
     roomId: project.meta.collaborationRoomId ?? '',
     inviteKey: project.meta.collaborationInviteKey ?? '',
     lanServerUrl: project.meta.collaborationLanServerUrl,
+    protocolVersion:
+      project.meta.collaborationMode === 'lan'
+        ? project.meta.collaborationLanProtocolVersion
+        : undefined,
   })
 }
 
@@ -1718,6 +1722,16 @@ function App({ initialInstallState = null }: AppProps) {
       try {
         setStatusMessage('Reconnecting collaboration room...')
         const mode = targetProject.meta.collaborationMode ?? 'webrtc'
+        if (
+          mode === 'lan' &&
+          targetProject.meta.collaborationLanProtocolVersion !== 2
+        ) {
+          setStatusMessage(
+            'This project uses an older LAN invite. Host LAN again to generate a secure invite.',
+          )
+          lastAutoConnectRef.current = null
+          return
+        }
         const result =
           mode === 'lan'
             ? isHostedLanRoom(roomId)
@@ -1771,6 +1785,7 @@ function App({ initialInstallState = null }: AppProps) {
             mode === 'lan'
               ? collaboration.sessionInfo.serverUrl || project.meta.collaborationLanServerUrl
               : undefined,
+          protocolVersion: mode === 'lan' ? 2 : undefined,
         })
       } catch {
         return ''
@@ -2903,6 +2918,7 @@ function App({ initialInstallState = null }: AppProps) {
         roomId: result.sessionInfo.roomId,
         inviteKey: result.sessionInfo.inviteCode,
         lanServerUrl: mode === 'lan' ? result.sessionInfo.serverUrl : undefined,
+        protocolVersion: mode === 'lan' ? 2 : undefined,
       }),
     )
   }

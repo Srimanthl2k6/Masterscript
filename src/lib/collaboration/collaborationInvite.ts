@@ -7,6 +7,7 @@ export interface CollaborationInviteDetails {
   roomId: string
   inviteKey: string
   lanServerUrl?: string
+  protocolVersion?: 2
 }
 
 const COLLABORATION_PROTOCOL = 'masterscript:'
@@ -44,6 +45,12 @@ export const buildCollaborationInvite = (details: CollaborationInviteDetails): s
   params.set('key', inviteKey)
 
   if (details.mode === 'lan') {
+    if (details.protocolVersion !== 2) {
+      throw new Error(
+        'This LAN invite uses an older security protocol. Ask the host to generate a new invite.',
+      )
+    }
+    params.set('v', '2')
     const lanServerUrl = trimValue(details.lanServerUrl)
     if (!lanServerUrl) {
       throw new Error('LAN invite is missing a server URL')
@@ -82,12 +89,17 @@ export const parseCollaborationInvite = (value: string): CollaborationInviteDeta
   }
 
   if (mode === 'lan') {
+    if (parsed.searchParams.get('v') !== '2') {
+      throw new Error(
+        'This LAN invite uses an older security protocol. Ask the host to generate a new invite.',
+      )
+    }
     const lanServerUrl = trimValue(parsed.searchParams.get('server') ?? undefined)
     if (!lanServerUrl) {
       throw new Error('LAN invite is missing a server URL')
     }
     assertLanServerUrl(lanServerUrl)
-    return { mode, roomId, inviteKey, lanServerUrl }
+    return { mode, roomId, inviteKey, lanServerUrl, protocolVersion: 2 }
   }
 
   return { mode, roomId, inviteKey }
@@ -99,7 +111,9 @@ export const hasCollaborationMeta = (project: ScriptProject): boolean => {
     project.meta.collaborationRoomId?.trim() &&
       project.meta.collaborationInviteKey?.trim() &&
       (mode === 'webrtc' || mode === 'lan') &&
-      (mode === 'webrtc' || project.meta.collaborationLanServerUrl?.trim()),
+      (mode === 'webrtc' ||
+        (project.meta.collaborationLanServerUrl?.trim() &&
+          project.meta.collaborationLanProtocolVersion === 2)),
   )
 }
 
@@ -114,6 +128,8 @@ export const applyCollaborationMeta = (
     collaborationRoomId: details.roomId,
     collaborationInviteKey: details.inviteKey,
     collaborationLanServerUrl: details.mode === 'lan' ? details.lanServerUrl : undefined,
+    collaborationLanProtocolVersion:
+      details.mode === 'lan' ? details.protocolVersion : undefined,
     updatedAt: new Date().toISOString(),
   },
 })

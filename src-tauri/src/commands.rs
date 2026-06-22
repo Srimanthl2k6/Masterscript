@@ -1,9 +1,10 @@
-use crate::lan::{self, LanRelayState};
+use crate::lan::{self, LanRelayState, LanTransportState};
 use crate::legacy::InstallState;
 use crate::migration::{self, BootstrapInstallationResult};
 use crate::models::{
     AutosaveReadResult, BinaryImportResult, LanHostOptions, LanHostResult, LanJoinOptions,
-    LanJoinResult, OpenProjectResult, OperationResult, TextImportResult,
+    LanJoinResult, LanTransportEvent, LanTransportOpenOptions, LanTransportOpenResult,
+    OpenProjectResult, OperationResult, TextImportResult,
 };
 use crate::persistence::{
     read_json_value, write_bytes_atomic, write_compact_json_atomic, write_json_atomic,
@@ -13,6 +14,7 @@ use base64::Engine;
 use serde_json::Value;
 use std::env;
 use std::path::{Path, PathBuf};
+use tauri::ipc::Channel;
 use tauri::{Manager, State};
 
 const AUTOSAVE_FILE: &str = "autosave.msproj.json";
@@ -436,9 +438,37 @@ pub async fn collaboration_lan_join(options: LanJoinOptions) -> LanJoinResult {
 }
 
 #[tauri::command]
+pub async fn collaboration_lan_transport_open(
+    state: State<'_, LanTransportState>,
+    options: LanTransportOpenOptions,
+    on_event: Channel<LanTransportEvent>,
+) -> Result<LanTransportOpenResult, String> {
+    Ok(state.open(options, on_event).await)
+}
+
+#[tauri::command]
+pub async fn collaboration_lan_transport_send(
+    state: State<'_, LanTransportState>,
+    session_id: String,
+    payload: String,
+) -> Result<OperationResult, String> {
+    Ok(state.send(&session_id, payload).await)
+}
+
+#[tauri::command]
+pub async fn collaboration_lan_transport_close(
+    state: State<'_, LanTransportState>,
+    session_id: String,
+) -> Result<OperationResult, String> {
+    Ok(state.close(&session_id).await)
+}
+
+#[tauri::command]
 pub async fn collaboration_lan_stop(
     state: State<'_, LanRelayState>,
+    transport_state: State<'_, LanTransportState>,
 ) -> Result<OperationResult, String> {
+    transport_state.stop_all().await;
     state.stop().await;
     Ok(OperationResult::success(None))
 }

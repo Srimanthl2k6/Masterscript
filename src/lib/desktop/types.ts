@@ -35,6 +35,7 @@ export interface BootstrapInstallationResult {
 
 export interface LanCollaborationHostOptions {
   roomId?: string
+  authKey: string
   port?: number
 }
 
@@ -61,6 +62,24 @@ export interface LanCollaborationJoinResult {
 
 export interface LanCollaborationStatusResult extends LanCollaborationHostResult {
   running?: boolean
+}
+
+export interface LanTransportOpenOptions {
+  serverUrl: string
+  roomId: string
+  authKey: string
+}
+
+export interface LanTransportOpenResult {
+  ok: boolean
+  sessionId?: string
+  error?: string
+}
+
+export interface LanTransportEvent {
+  eventType: 'message' | 'disconnected'
+  payload?: string
+  error?: string
 }
 
 export interface OperationResult {
@@ -111,6 +130,12 @@ export interface DesktopNativeApi {
   joinLanCollaboration(
     options: LanCollaborationJoinOptions,
   ): Promise<LanCollaborationJoinResult>
+  openLanTransport(
+    options: LanTransportOpenOptions,
+    onEvent: (event: LanTransportEvent) => void,
+  ): Promise<LanTransportOpenResult>
+  sendLanTransport(sessionId: string, payload: string): Promise<OperationResult>
+  closeLanTransport(sessionId: string): Promise<OperationResult>
   stopLanCollaboration(): Promise<{ ok: boolean; error?: string }>
   getLanCollaborationStatus(): Promise<LanCollaborationStatusResult>
   exportMigrationManifest?(

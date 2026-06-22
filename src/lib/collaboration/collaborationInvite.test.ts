@@ -29,16 +29,18 @@ describe('collaboration invite helpers', () => {
       roomId: 'masterscript-room',
       inviteKey: 'secret.salt',
       lanServerUrl: 'ws://192.168.1.12:3210',
+      protocolVersion: 2,
     })
 
     expect(invite).toBe(
-      'masterscript://collab?mode=lan&room=masterscript-room&key=secret.salt&server=ws%3A%2F%2F192.168.1.12%3A3210',
+      'masterscript://collab?mode=lan&room=masterscript-room&key=secret.salt&v=2&server=ws%3A%2F%2F192.168.1.12%3A3210',
     )
     expect(parseCollaborationInvite(invite)).toEqual({
       mode: 'lan',
       roomId: 'masterscript-room',
       inviteKey: 'secret.salt',
       lanServerUrl: 'ws://192.168.1.12:3210',
+      protocolVersion: 2,
     })
   })
 
@@ -47,7 +49,10 @@ describe('collaboration invite helpers', () => {
     expect(() => parseCollaborationInvite('masterscript://collab?mode=webrtc&key=secret')).toThrow('Invite is missing a room ID')
     expect(() => parseCollaborationInvite('masterscript://collab?mode=webrtc&room=room')).toThrow('Invite is missing an invite key')
     expect(() => parseCollaborationInvite('masterscript://collab?mode=cloud&room=room&key=secret')).toThrow('Invite mode is not supported')
-    expect(() => parseCollaborationInvite('masterscript://collab?mode=lan&room=room&key=secret&server=https%3A%2F%2Fexample.com')).toThrow('LAN invite server must use ws:// or wss://')
+    expect(() => parseCollaborationInvite('masterscript://collab?mode=lan&room=room&key=secret&v=2&server=https%3A%2F%2Fexample.com')).toThrow('LAN invite server must use ws:// or wss://')
+    expect(() => parseCollaborationInvite('masterscript://collab?mode=lan&room=room&key=secret&server=ws%3A%2F%2F127.0.0.1')).toThrow(
+      'This LAN invite uses an older security protocol. Ask the host to generate a new invite.',
+    )
   })
 
   it('applies collaboration metadata to a project without mutating the input', () => {
@@ -65,5 +70,29 @@ describe('collaboration invite helpers', () => {
       collaborationRoomId: 'masterscript-room',
       collaborationInviteKey: 'secret.salt',
     })
+  })
+
+  it('requires protocol v2 metadata for persisted LAN sessions', () => {
+    const project = createEmptyProject()
+    const legacy = {
+      ...project,
+      meta: {
+        ...project.meta,
+        collaborationMode: 'lan' as const,
+        collaborationRoomId: 'masterscript-room',
+        collaborationInviteKey: 'secret.salt',
+        collaborationLanServerUrl: 'ws://127.0.0.1:3210',
+      },
+    }
+    const current = {
+      ...legacy,
+      meta: {
+        ...legacy.meta,
+        collaborationLanProtocolVersion: 2 as const,
+      },
+    }
+
+    expect(hasCollaborationMeta(legacy)).toBe(false)
+    expect(hasCollaborationMeta(current)).toBe(true)
   })
 })
