@@ -327,7 +327,11 @@ mod tests {
             registry
                 .resolve_for_write(&file_ref.grant_id)
                 .expect("write target"),
-            target,
+            directory
+                .path()
+                .canonicalize()
+                .expect("canonical parent")
+                .join("new-draft.msproj.json"),
         );
         assert!(registry
             .issue_save(&directory.path().join("draft.txt"))
