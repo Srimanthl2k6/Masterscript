@@ -9,6 +9,11 @@ const workflow = readFileSync('.github/workflows/tauri-pass1-proof.yml', 'utf8')
 const releaseWorkflow = readFileSync('.github/workflows/release.yml', 'utf8')
 
 describe('Tauri release workflows', () => {
+  it('runs the cross-platform release gate for pull requests and main', () => {
+    expect(workflow).toContain('pull_request:')
+    expect(workflow).toContain('- main')
+  })
+
   it('keeps all migration version declarations synchronized', () => {
     const tauriConfig = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'))
     expect(legacySourceVersion).toBe('0.1.14')
