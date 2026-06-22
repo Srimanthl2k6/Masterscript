@@ -29,6 +29,7 @@ describe('security governance', () => {
     expect(workflow).toContain('npm run security:audit')
     expect(workflow).toContain('dependency-review-action@')
     expect(workflow).toContain('OFL-1.1')
+    expect(workflow).toContain('mkdir -p sbom')
     expect(workflow).toContain('sbom-action@')
     expect(workflow).not.toContain('${{ secrets.')
   })
