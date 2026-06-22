@@ -1,5 +1,12 @@
 {
   "schemaVersion": 1,
-  "exceptions": []
+  "exceptions": [
+    {
+      "id": "RUSTSEC-2024-0429",
+      "owner": "MasterScript maintainer",
+      "rationale": "Tauri 2.11.3's Linux GTK3 dependency graph requires glib 0.18.5, and version-only scanners cannot recognize the locally backported upstream fix.",
+      "compensatingControl": "The vendored crate applies gtk-rs-core pull request 1343, a regression test asserts the mutable out-parameter fix, and Linux CI compiles and tests the patched dependency.",
+      "expires": "2026-12-31"
+    }
+  ]
 }
-

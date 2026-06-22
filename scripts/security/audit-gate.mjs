@@ -53,13 +53,25 @@ const cargoFindings = (cargoReport.vulnerabilities?.list ?? []).map(
     ids: advisoryIds(finding),
   }),
 )
+const cargoUnsoundFindings = (cargoReport.warnings?.unsound ?? []).map(
+  (finding) => ({
+    source: 'RustSec',
+    severity: 'unsound',
+    packageName: finding.package?.name ?? 'unknown crate',
+    ids: advisoryIds(finding),
+  }),
+)
 
 const exceptions = new Map(
   readValidatedExceptions().map((entry) => [entry.id.toUpperCase(), entry]),
 )
 const blocked = []
 
-for (const finding of [...npmFindings, ...cargoFindings]) {
+for (const finding of [
+  ...npmFindings,
+  ...cargoFindings,
+  ...cargoUnsoundFindings,
+]) {
   const accepted = finding.ids.find((id) => exceptions.has(id))
   if (accepted) {
     const entry = exceptions.get(accepted)
@@ -83,4 +95,3 @@ if (blocked.length > 0) {
 }
 
 console.log('No unexcepted high/critical npm or RustSec advisories found')
-

@@ -125,6 +125,24 @@ The review used:
 - **Verification:** Migration and tutorial tests cover fresh, migrated, existing,
   corrupt-state, desktop, and web cases.
 
+### MS-2026-09 — Tauri's Linux GTK3 graph contained an unsound glib iterator
+
+- **Severity:** Medium
+- **Status:** Fixed by upstream backport
+- **Affected boundary:** Linux GTK/WebKit dependency graph.
+- **Risk:** `glib 0.18.5` contains RUSTSEC-2024-0429, where a variadic GLib
+  out-parameter was passed through an immutable reference. The affected
+  `VariantStrIter` methods can dereference a null pointer in optimized builds.
+- **Fix:** MasterScript vendors the exact glib 0.18.5 source required by Tauri
+  and applies the two-line fix from gtk-rs-core pull request 1343 (`mut p` and
+  `&mut p`). The override can be removed when Tauri's supported Linux stack uses
+  glib 0.20 or later.
+- **Scanner handling:** The RustSec exception expires on 2026-12-31 because
+  version-only scanners still identify the patched 0.18.5 package. It documents
+  the source backport rather than accepting the vulnerable implementation.
+- **Verification:** A regression test inspects the patch, and Linux CI compiles,
+  tests, and packages the overridden crate.
+
 ## Previously planned controls verified in this release
 
 - LAN protocol v2 uses random room identifiers and invite secrets,

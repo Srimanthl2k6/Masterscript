@@ -51,6 +51,18 @@ describe('security governance', () => {
     }
   })
 
+  it('backports the glib iterator soundness fix required by Tauri GTK3', () => {
+    const cargoManifest = read('src-tauri/Cargo.toml')
+    const patchedGlib = read('vendor/glib-0.18.5/src/variant_iter.rs')
+
+    expect(cargoManifest).toContain(
+      'glib = { path = "../vendor/glib-0.18.5" }',
+    )
+    expect(patchedGlib).toContain('let mut p: *mut libc::c_char')
+    expect(patchedGlib).toContain('&mut p,')
+    expect(patchedGlib).not.toContain('\n                &p,\n')
+  })
+
   it('provides executable repository settings and exception validators', () => {
     const packageJson = JSON.parse(read('package.json'))
     expect(existsSync('scripts/security/verify-repository-settings.mjs')).toBe(
