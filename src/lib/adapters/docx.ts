@@ -22,6 +22,7 @@ interface MammothResult {
 interface MammothLike {
   convertToHtml: (
     input: { arrayBuffer: ArrayBuffer } | { buffer: unknown },
+    options?: { externalFileAccess?: boolean },
   ) => Promise<MammothResult>
 }
 
@@ -129,7 +130,9 @@ export const importDocxProject = async (
     ? { buffer: globalWithBuffer.Buffer.from(buffer) }
     : { arrayBuffer: buffer }
 
-  const mammothResult = await mammoth.convertToHtml(mammothInput)
+  const mammothResult = await mammoth.convertToHtml(mammothInput, {
+    externalFileAccess: false,
+  })
 
   const warnings = mammothResult.messages.map((message) => ({
     code: message.type === 'error' ? 'DOCX_IMPORT_ERROR' : 'DOCX_IMPORT_WARNING',

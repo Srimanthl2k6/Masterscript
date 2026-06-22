@@ -39,6 +39,12 @@ import type { InstallState, ProjectFileRef, RecentProjectEntry } from './lib/des
 import { legacySourceVersion } from './lib/desktop/version'
 import { useTauriCloseFlush } from './lib/desktop/useTauriCloseFlush'
 import { paginateProjectForPrint } from './lib/adapters/pagination'
+import {
+  MAX_PROJECT_JSON_BYTES,
+  validateProjectCandidate,
+} from './lib/adapters/importLimits'
+import { pickBinaryFile, pickTextFile } from './lib/adapters/importFilePicker'
+import { runImportConversion } from './lib/adapters/importWorkerClient'
 import type { AdapterWarning } from './lib/adapters/types'
 import { paginateBlocksForEditor } from './lib/editorPagination'
 import {
@@ -512,6 +518,7 @@ const reorderById = <T extends { id: string }>(
 }
 
 const hydrateProject = (candidate: ScriptProject): ScriptProject => {
+  validateProjectCandidate(candidate)
   const fallback = createEmptyProject()
   return {
     ...fallback,
@@ -635,71 +642,6 @@ const triggerBinaryDownload = (
   link.remove()
   URL.revokeObjectURL(url)
 }
-
-const pickTextFile = (accept: string): Promise<{ name: string; content: string } | null> =>
-  new Promise((resolve) => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = accept
-    input.onchange = () => {
-      const file = input.files?.[0]
-      if (!file) {
-        resolve(null)
-        return
-      }
-
-      const reader = new FileReader()
-      reader.onload = () => {
-        if (typeof reader.result !== 'string') {
-          resolve(null)
-          return
-        }
-
-        resolve({
-          name: file.name,
-          content: reader.result,
-        })
-      }
-      reader.onerror = () => resolve(null)
-      reader.readAsText(file)
-    }
-
-    input.click()
-  })
-
-const pickBinaryFile = (
-  accept: string,
-): Promise<{ name: string; content: ArrayBuffer } | null> =>
-  new Promise((resolve) => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = accept
-    input.onchange = () => {
-      const file = input.files?.[0]
-      if (!file) {
-        resolve(null)
-        return
-      }
-
-      const reader = new FileReader()
-      reader.onload = () => {
-        if (!(reader.result instanceof ArrayBuffer)) {
-          resolve(null)
-          return
-        }
-
-        resolve({
-          name: file.name,
-          content: reader.result,
-        })
-      }
-      reader.onerror = () => resolve(null)
-      reader.readAsArrayBuffer(file)
-    }
-
-    input.click()
-  })
-
 const inferTitleFromPath = (pathLike: string): string => {
   const fileName = pathLike.split(/[\\/]/).pop() ?? pathLike
   const withoutExtension = fileName.replace(/\.[^.]+$/, '')
@@ -2801,6 +2743,11 @@ function App({ initialInstallState = null }: AppProps) {
     if (!selectedFile) {
       return
     }
+    if (selectedFile.size > MAX_PROJECT_JSON_BYTES) {
+      setStatusMessage('Project file exceeds the 50 MiB limit')
+      event.target.value = ''
+      return
+    }
 
     const reader = new FileReader()
     reader.onload = () => {
@@ -3121,15 +3068,16 @@ function App({ initialInstallState = null }: AppProps) {
 
   const importFountain = async () => {
     try {
-      const { importFountainProject } = await import('./lib/adapters/fountain')
-
       if (desktopBridge.runtime !== 'web') {
         const result = await desktopBridge.importFountain()
         if (!result.ok || !result.content) {
           return
         }
 
-        const parsed = importFountainProject(result.content)
+        const parsed = await runImportConversion({
+          kind: 'fountain',
+          content: result.content,
+        })
         applyImportedProject(
           parsed.data,
           'Fountain',
@@ -3144,7 +3092,10 @@ function App({ initialInstallState = null }: AppProps) {
         return
       }
 
-      const parsed = importFountainProject(selected.content)
+      const parsed = await runImportConversion({
+        kind: 'fountain',
+        content: selected.content,
+      })
       applyImportedProject(parsed.data, 'Fountain', parsed.warnings, selected.name)
     } catch (error) {
       setStatusMessage(
@@ -3155,15 +3106,16 @@ function App({ initialInstallState = null }: AppProps) {
 
   const importFdx = async () => {
     try {
-      const { importFdxProject } = await import('./lib/adapters/fdx')
-
       if (desktopBridge.runtime !== 'web') {
         const result = await desktopBridge.importFdx()
         if (!result.ok || !result.content) {
           return
         }
 
-        const parsed = importFdxProject(result.content)
+        const parsed = await runImportConversion({
+          kind: 'fdx',
+          content: result.content,
+        })
         applyImportedProject(
           parsed.data,
           'FDX',
@@ -3178,7 +3130,10 @@ function App({ initialInstallState = null }: AppProps) {
         return
       }
 
-      const parsed = importFdxProject(selected.content)
+      const parsed = await runImportConversion({
+        kind: 'fdx',
+        content: selected.content,
+      })
       applyImportedProject(parsed.data, 'FDX', parsed.warnings, selected.name)
     } catch (error) {
       setStatusMessage(
@@ -3210,15 +3165,16 @@ function App({ initialInstallState = null }: AppProps) {
 
   const importDocx = async () => {
     try {
-      const { importDocxProject } = await import('./lib/adapters/docx')
-
       if (desktopBridge.runtime !== 'web') {
         const result = await desktopBridge.importDocx()
         if (!result.ok || !result.base64) {
           return
         }
 
-        const parsed = await importDocxProject(base64ToArrayBuffer(result.base64))
+        const parsed = await runImportConversion({
+          kind: 'docx',
+          content: base64ToArrayBuffer(result.base64),
+        })
         applyImportedProject(
           parsed.data,
           'DOCX',
@@ -3233,7 +3189,10 @@ function App({ initialInstallState = null }: AppProps) {
         return
       }
 
-      const parsed = await importDocxProject(selected.content)
+      const parsed = await runImportConversion({
+        kind: 'docx',
+        content: selected.content,
+      })
       applyImportedProject(parsed.data, 'DOCX', parsed.warnings, selected.name)
     } catch (error) {
       setStatusMessage(

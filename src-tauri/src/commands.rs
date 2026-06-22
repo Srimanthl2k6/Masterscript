@@ -1,4 +1,9 @@
 use crate::file_grants::FileGrantRegistry;
+use crate::import_security::{
+    read_file_bounded, read_json_value_bounded, read_project_file, validate_docx_archive,
+    validate_project_value, validate_serialized_size, DOCX_COMPRESSED_LIMIT, PROJECT_JSON_LIMIT,
+    TEXT_IMPORT_LIMIT,
+};
 use crate::lan::{self, LanRelayState, LanTransportState};
 use crate::legacy::InstallState;
 use crate::migration::{self, BootstrapInstallationResult};
@@ -7,9 +12,7 @@ use crate::models::{
     LanJoinResult, LanTransportEvent, LanTransportOpenOptions, LanTransportOpenResult,
     OpenProjectResult, OperationResult, ProjectFileRef, TextImportResult,
 };
-use crate::persistence::{
-    read_json_value, write_bytes_atomic, write_compact_json_atomic, write_json_atomic,
-};
+use crate::persistence::{write_bytes_atomic, write_compact_json_atomic, write_json_atomic};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use serde_json::Value;
@@ -59,6 +62,7 @@ fn recent_project_snapshots_path(app: &tauri::AppHandle) -> Result<PathBuf, Stri
 }
 
 fn save_json(path: &Path, project: &Value) -> Result<(), String> {
+    validate_project_value(project).map_err(|error| error.to_string())?;
     write_json_atomic(path, project).map_err(|error| error.to_string())
 }
 
@@ -70,7 +74,7 @@ fn open_project_from_ref(
         Ok(path) => path,
         Err(error) => return OpenProjectResult::failure(error.to_string()),
     };
-    match read_json_value(&path) {
+    match read_project_file(&path) {
         Ok(project) => OpenProjectResult::success(project, file_ref),
         Err(error) => OpenProjectResult::failure(error.to_string()),
     }
@@ -92,13 +96,32 @@ async fn choose_text_file(title: &str, filter_name: &str, extensions: &[&str]) -
         };
     };
     let path = file.path().to_owned();
-    match tokio::fs::read_to_string(&path).await {
-        Ok(content) => TextImportResult {
-            ok: true,
-            content: Some(content),
-            display_path: Some(path.to_string_lossy().into_owned()),
+    let read_path = path.clone();
+    let read_result =
+        tokio::task::spawn_blocking(move || read_file_bounded(&read_path, TEXT_IMPORT_LIMIT)).await;
+    match read_result {
+        Ok(Ok(bytes)) => match String::from_utf8(bytes) {
+            Ok(content) => TextImportResult {
+                ok: true,
+                content: Some(content),
+                display_path: Some(path.to_string_lossy().into_owned()),
+                cancelled: None,
+                error: None,
+            },
+            Err(error) => TextImportResult {
+                ok: false,
+                content: None,
+                display_path: None,
+                cancelled: None,
+                error: Some(error.to_string()),
+            },
+        },
+        Ok(Err(error)) => TextImportResult {
+            ok: false,
+            content: None,
+            display_path: None,
             cancelled: None,
-            error: None,
+            error: Some(error.to_string()),
         },
         Err(error) => TextImportResult {
             ok: false,
@@ -162,6 +185,9 @@ async fn export_binary(
 
 #[tauri::command]
 pub fn project_autosave(app: tauri::AppHandle, project: Value) -> OperationResult {
+    if let Err(error) = validate_project_value(&project) {
+        return OperationResult::failure(error.to_string());
+    }
     match autosave_path(&app) {
         Ok(path) => match write_compact_json_atomic(&path, &project) {
             Ok(()) => OperationResult::success(),
@@ -183,7 +209,7 @@ pub fn project_read_autosave(app: tauri::AppHandle) -> AutosaveReadResult {
             }
         }
     };
-    match read_json_value(&path) {
+    match read_project_file(&path) {
         Ok(project) => AutosaveReadResult {
             ok: true,
             project: Some(project),
@@ -205,8 +231,14 @@ pub fn project_read_autosave(app: tauri::AppHandle) -> AutosaveReadResult {
 #[tauri::command]
 pub fn project_read_recent_snapshots(app: tauri::AppHandle) -> Result<Value, String> {
     let path = recent_project_snapshots_path(&app)?;
-    match read_json_value(&path) {
-        Ok(Value::Object(snapshots)) => Ok(Value::Object(snapshots)),
+    match read_json_value_bounded(&path, PROJECT_JSON_LIMIT) {
+        Ok(Value::Object(snapshots)) => {
+            let validated = snapshots
+                .into_iter()
+                .filter(|(_, project)| validate_project_value(project).is_ok())
+                .collect();
+            Ok(Value::Object(validated))
+        }
         Ok(_) => Ok(Value::Object(Default::default())),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             Ok(Value::Object(Default::default()))
@@ -217,6 +249,9 @@ pub fn project_read_recent_snapshots(app: tauri::AppHandle) -> Result<Value, Str
 
 #[tauri::command]
 pub fn project_write_recent_snapshot(app: tauri::AppHandle, project: Value) -> OperationResult {
+    if let Err(error) = validate_project_value(&project) {
+        return OperationResult::failure(error.to_string());
+    }
     let Some(project_id) = project.get("id").and_then(Value::as_str) else {
         return OperationResult::failure("Recent project snapshot is missing an id");
     };
@@ -224,7 +259,7 @@ pub fn project_write_recent_snapshot(app: tauri::AppHandle, project: Value) -> O
         Ok(path) => path,
         Err(error) => return OperationResult::failure(error),
     };
-    let mut snapshots = match read_json_value(&path) {
+    let mut snapshots = match read_json_value_bounded(&path, PROJECT_JSON_LIMIT) {
         Ok(Value::Object(value)) => value,
         _ => Default::default(),
     };
@@ -244,6 +279,11 @@ pub fn project_write_recent_snapshot(app: tauri::AppHandle, project: Value) -> O
     });
     entries.truncate(RECENT_PROJECT_SNAPSHOT_LIMIT);
     let snapshots = serde_json::Map::from_iter(entries);
+    if let Err(error) =
+        validate_serialized_size(&Value::Object(snapshots.clone()), PROJECT_JSON_LIMIT)
+    {
+        return OperationResult::failure(error.to_string());
+    }
 
     match write_compact_json_atomic(&path, &Value::Object(snapshots)) {
         Ok(()) => OperationResult::success(),
@@ -396,13 +436,27 @@ pub async fn project_import_docx() -> BinaryImportResult {
         };
     };
     let path = file.path().to_owned();
-    match tokio::fs::read(&path).await {
-        Ok(bytes) => BinaryImportResult {
+    let read_path = path.clone();
+    let read_result = tokio::task::spawn_blocking(move || {
+        let bytes = read_file_bounded(&read_path, DOCX_COMPRESSED_LIMIT)?;
+        validate_docx_archive(&bytes)?;
+        Ok::<_, std::io::Error>(bytes)
+    })
+    .await;
+    match read_result {
+        Ok(Ok(bytes)) => BinaryImportResult {
             ok: true,
             base64: Some(STANDARD.encode(bytes)),
             display_path: Some(path.to_string_lossy().into_owned()),
             cancelled: None,
             error: None,
+        },
+        Ok(Err(error)) => BinaryImportResult {
+            ok: false,
+            base64: None,
+            display_path: None,
+            cancelled: None,
+            error: Some(error.to_string()),
         },
         Err(error) => BinaryImportResult {
             ok: false,
