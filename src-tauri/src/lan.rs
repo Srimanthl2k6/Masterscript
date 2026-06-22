@@ -489,7 +489,6 @@ async fn handle_peer(
         return;
     }
 
-    let (mut sink, mut source) = websocket.split();
     let (sender, mut receiver) = mpsc::channel::<Message>(PEER_QUEUE_CAPACITY);
     let (peer_id, cached_state, peers_to_notify) = {
         let mut state = room.lock().await;
@@ -526,6 +525,7 @@ async fn handle_peer(
         return;
     }
     drop(permit);
+    let (mut sink, mut source) = websocket.split();
 
     if let Some(message) = cached_state {
         let _ = sender.try_send(message);
