@@ -6,6 +6,11 @@ import { WebSocket } from 'ws'
 
 const root = process.cwd()
 const outputDirectory = path.join(root, 'analysis', 'tauri-pass8')
+const appVersion = (
+  JSON.parse(
+    await readFile(path.join(root, 'package.json'), 'utf8'),
+  ) as { version: string }
+).version
 const executable =
   process.argv.find((argument) => argument.startsWith('--executable='))?.slice(13) ??
   path.join(root, 'src-tauri', 'target', 'release', 'masterscript.exe')
@@ -255,7 +260,7 @@ try {
     recordedAt: new Date().toISOString(),
     platform: process.platform,
     architecture: process.arch,
-    version: '0.2.0',
+    version: appVersion,
     method: 'Tauri 2 WebView2 production binary with CDP',
     startupMs,
     idleProcessMemory,
