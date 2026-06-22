@@ -1,12 +1,19 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectFileRef {
+    pub grant_id: String,
+    pub display_path: String,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OperationResult {
     pub ok: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
+    pub file_ref: Option<ProjectFileRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cancelled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -14,10 +21,19 @@ pub struct OperationResult {
 }
 
 impl OperationResult {
-    pub fn success(path: Option<String>) -> Self {
+    pub fn success() -> Self {
         Self {
             ok: true,
-            path,
+            file_ref: None,
+            cancelled: None,
+            error: None,
+        }
+    }
+
+    pub fn success_with_file_ref(file_ref: ProjectFileRef) -> Self {
+        Self {
+            ok: true,
+            file_ref: Some(file_ref),
             cancelled: None,
             error: None,
         }
@@ -26,7 +42,7 @@ impl OperationResult {
     pub fn cancelled() -> Self {
         Self {
             ok: false,
-            path: None,
+            file_ref: None,
             cancelled: Some(true),
             error: None,
         }
@@ -35,7 +51,7 @@ impl OperationResult {
     pub fn failure(error: impl Into<String>) -> Self {
         Self {
             ok: false,
-            path: None,
+            file_ref: None,
             cancelled: None,
             error: Some(error.into()),
         }
@@ -58,7 +74,7 @@ pub struct OpenProjectResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
+    pub file_ref: Option<ProjectFileRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cancelled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -72,7 +88,7 @@ pub struct TextImportResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
+    pub display_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cancelled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -86,7 +102,7 @@ pub struct BinaryImportResult {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base64: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub path: Option<String>,
+    pub display_path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cancelled: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -99,6 +115,38 @@ pub struct LanHostOptions {
     pub room_id: Option<String>,
     pub auth_key: String,
     pub port: Option<u16>,
+}
+
+impl OpenProjectResult {
+    pub fn success(project: Value, file_ref: ProjectFileRef) -> Self {
+        Self {
+            ok: true,
+            project: Some(project),
+            file_ref: Some(file_ref),
+            cancelled: None,
+            error: None,
+        }
+    }
+
+    pub fn cancelled() -> Self {
+        Self {
+            ok: false,
+            project: None,
+            file_ref: None,
+            cancelled: Some(true),
+            error: None,
+        }
+    }
+
+    pub fn failure(error: impl Into<String>) -> Self {
+        Self {
+            ok: false,
+            project: None,
+            file_ref: None,
+            cancelled: None,
+            error: Some(error.into()),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]

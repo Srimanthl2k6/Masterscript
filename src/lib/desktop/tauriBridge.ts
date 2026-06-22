@@ -47,11 +47,11 @@ export const createTauriDesktopBridge = (
     invoke<OperationResult>('project_write_recent_snapshot', { project }),
   saveProject: (project, title) =>
     invoke<OperationResult>('project_save_file', { project, title }),
-  saveProjectPath: (filePath, project) =>
-    invoke<OperationResult>('project_save_path', { filePath, project }),
+  saveProjectRef: (grantId, project) =>
+    invoke<OperationResult>('project_save_ref', { grantId, project }),
   openProject: () => invoke<OpenProjectResult>('project_open_file'),
-  openProjectPath: (filePath) =>
-    invoke<OpenProjectResult>('project_open_path', { filePath }),
+  openProjectRef: (grantId) =>
+    invoke<OpenProjectResult>('project_open_ref', { grantId }),
   exportFountain: (title, content) =>
     invoke<OperationResult>('project_export_fountain', { title, content }),
   importFountain: () =>

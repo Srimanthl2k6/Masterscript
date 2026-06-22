@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-project-import-fountain"
+description = "Enables the project_import_fountain command without any pre-configured scope."
+commands.allow = ["project_import_fountain"]
+
+[[permission]]
+identifier = "deny-project-import-fountain"
+description = "Denies the project_import_fountain command without any pre-configured scope."
+commands.deny = ["project_import_fountain"]

@@ -26,7 +26,7 @@ import {
 import { DESKTOP_DOWNLOAD_LINKS, shouldShowDownloadButton } from './lib/download'
 import { desktopBridge } from './lib/desktop/desktopBridge'
 import { buildMigrationManifestV1 } from './lib/desktop/migration'
-import { isLikelyLocalProjectPath } from './lib/desktop/projectPath'
+import { readRecentProjects, upsertRecentProject } from './lib/desktop/recentProjects'
 import {
   autosaveKey,
   hostedLanRoomsKey,
@@ -35,7 +35,7 @@ import {
   recentProjectsKey,
   themeKey,
 } from './lib/desktop/storageKeys'
-import type { InstallState, RecentProjectEntry } from './lib/desktop/types'
+import type { InstallState, ProjectFileRef, RecentProjectEntry } from './lib/desktop/types'
 import { legacySourceVersion } from './lib/desktop/version'
 import { useTauriCloseFlush } from './lib/desktop/useTauriCloseFlush'
 import { paginateProjectForPrint } from './lib/adapters/pagination'
@@ -935,6 +935,7 @@ function App({ initialInstallState = null }: AppProps) {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('draft')
   const [statusMessage, setStatusMessage] = useState('Local-first mode active')
   const [savedPath, setSavedPath] = useState('Autosave only')
+  const [savedFileRef, setSavedFileRef] = useState<ProjectFileRef | null>(null)
   const [autosaveState, setAutosaveState] = useState<AutosaveState>('idle')
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => getInitialThemeMode())
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null)
@@ -981,40 +982,9 @@ function App({ initialInstallState = null }: AppProps) {
   const [previewZoom, setPreviewZoom] = useState(defaultPreviewZoom)
   const [previewPageIndex, setPreviewPageIndex] = useState(0)
   const [sceneFilterQuery, setSceneFilterQuery] = useState('')
-  const [recentProjects, setRecentProjects] = useState<RecentProjectEntry[]>(() => {
-    try {
-      const raw = localStorage.getItem(recentProjectsKey)
-      if (!raw) {
-        return []
-      }
-
-      const parsed = JSON.parse(raw) as unknown
-      if (!Array.isArray(parsed)) {
-        return []
-      }
-
-      return parsed
-        .filter(
-          (item): item is RecentProjectEntry =>
-            isRecord(item) &&
-            typeof item.label === 'string' &&
-            typeof item.source === 'string' &&
-            typeof item.updatedAt === 'string',
-        )
-        .map((item) => ({
-          label: item.label,
-          source: item.source,
-          updatedAt: item.updatedAt,
-          projectId:
-            isRecord(item) && typeof item.projectId === 'string'
-              ? item.projectId
-              : undefined,
-        }))
-        .slice(0, 8)
-    } catch {
-      return []
-    }
-  })
+  const [recentProjects, setRecentProjects] = useState<RecentProjectEntry[]>(
+    () => readRecentProjects(localStorage),
+  )
   const [isCollaborationPanelOpen, setIsCollaborationPanelOpen] = useState(false)
   const [isTutorialOpen, setIsTutorialOpen] = useState(false)
   const [tutorialStepIndex, setTutorialStepIndex] = useState(0)
@@ -1577,7 +1547,7 @@ function App({ initialInstallState = null }: AppProps) {
   const applyingCollaborationProjectRef = useRef(false)
   const lastAutoConnectRef = useRef<{ projectId: string; roomId: string } | null>(null)
   const autoConnectCollaborationRef = useRef<
-    (targetProject: ScriptProject, projectPath?: string) => Promise<void>
+    (targetProject: ScriptProject, projectFileRef?: ProjectFileRef) => Promise<void>
   >(async () => undefined)
   const collaborationBootstrapAbortRef = useRef<AbortController | null>(null)
   const tutorialIsManualRef = useRef(false)
@@ -1602,16 +1572,16 @@ function App({ initialInstallState = null }: AppProps) {
     },
   })
   const latestProjectRef = useRef(project)
-  const latestSavedPathRef = useRef(savedPath)
+  const latestSavedFileRef = useRef(savedFileRef)
   const dirtyProjectVersionRef = useRef(1)
   const persistedProjectVersionRef = useRef(0)
   const persistenceInFlightRef = useRef<Promise<void> | null>(null)
 
   useEffect(() => {
     latestProjectRef.current = project
-    latestSavedPathRef.current = savedPath
+    latestSavedFileRef.current = savedFileRef
     dirtyProjectVersionRef.current += 1
-  }, [project, savedPath])
+  }, [project, savedFileRef])
 
   const flushProjectPersistence = useCallback(async (force = false) => {
     if (
@@ -1632,13 +1602,13 @@ function App({ initialInstallState = null }: AppProps) {
     }
 
     const targetProject = latestProjectRef.current
-    const targetPath = latestSavedPathRef.current
+    const targetFileRef = latestSavedFileRef.current
     const targetVersion = dirtyProjectVersionRef.current
     const persistence = (async () => {
       if (desktopBridge.runtime !== 'web') {
         await desktopBridge.autosave(targetProject)
-        if (isLikelyLocalProjectPath(targetPath)) {
-          await desktopBridge.saveProjectPath(targetPath, targetProject)
+        if (targetFileRef) {
+          await desktopBridge.saveProjectRef(targetFileRef.grantId, targetProject)
         }
       } else {
         localStorage.setItem(autosaveKey, JSON.stringify(targetProject))
@@ -1669,17 +1639,17 @@ function App({ initialInstallState = null }: AppProps) {
   }, [])
 
   const persistProjectToKnownPath = useCallback(
-    async (targetProject: ScriptProject, explicitPath = savedPath) => {
-      if (
-        desktopBridge.runtime === 'web' ||
-        !isLikelyLocalProjectPath(explicitPath)
-      ) {
+    async (
+      targetProject: ScriptProject,
+      explicitFileRef: ProjectFileRef | null = savedFileRef,
+    ) => {
+      if (desktopBridge.runtime === 'web' || !explicitFileRef) {
         return
       }
 
-      await desktopBridge.saveProjectPath(explicitPath, targetProject)
+      await desktopBridge.saveProjectRef(explicitFileRef.grantId, targetProject)
     },
-    [savedPath],
+    [savedFileRef],
   )
 
   const applyRemoteCollaborationProject = useCallback((remoteProject: ScriptProject) => {
@@ -1706,7 +1676,7 @@ function App({ initialInstallState = null }: AppProps) {
   })
 
   const autoConnectCollaboration = useCallback(
-    async (targetProject: ScriptProject, projectPath?: string) => {
+    async (targetProject: ScriptProject, projectFileRef?: ProjectFileRef) => {
       const roomId = targetProject.meta.collaborationRoomId?.trim()
       const inviteKey = targetProject.meta.collaborationInviteKey?.trim()
       if (!roomId || !inviteKey) {
@@ -1750,7 +1720,7 @@ function App({ initialInstallState = null }: AppProps) {
         if (result.sessionInfo.mode === 'lan-host') {
           rememberHostedLanRoom(result.sessionInfo.roomId)
         }
-        await persistProjectToKnownPath(result.project, projectPath)
+        await persistProjectToKnownPath(result.project, projectFileRef)
         setStatusMessage(`Collaboration room active: ${result.sessionInfo.roomId}`)
       } catch (error) {
         lastAutoConnectRef.current = null
@@ -1854,25 +1824,16 @@ function App({ initialInstallState = null }: AppProps) {
     label: string,
     source: RecentProjectEntry['source'],
     projectId?: string,
+    fileRef?: ProjectFileRef,
   ) => {
-    const cleaned = label.trim()
-    if (!cleaned) {
-      return
-    }
-
-    setRecentProjects((previous) => {
-      const nextItem: RecentProjectEntry = {
-        label: cleaned,
+    setRecentProjects((previous) =>
+      upsertRecentProject(previous, {
+        label,
         source,
         projectId,
-        updatedAt: new Date().toISOString(),
-      }
-
-      const deduped = previous.filter((entry) =>
-        projectId ? entry.projectId !== projectId : entry.label !== cleaned,
-      )
-      return [nextItem, ...deduped].slice(0, 8)
-    })
+        fileRef,
+      }),
+    )
   }
 
   const commit = (
@@ -2684,11 +2645,12 @@ function App({ initialInstallState = null }: AppProps) {
       const result = await desktopBridge.saveProject(project, project.meta.title)
       if (result.ok) {
         await desktopBridge.autosave(project)
-        setSavedPath(result.path ?? 'Saved with desktop file picker')
+        setSavedFileRef(result.fileRef ?? null)
+        setSavedPath(result.fileRef?.displayPath ?? 'Saved with desktop file picker')
         setStatusMessage('Project saved to disk')
-        if (result.path) {
+        if (result.fileRef) {
           writeRecentProjectSnapshot(project)
-          pushRecentProject(result.path, 'project', project.id)
+          pushRecentProject(result.fileRef.displayPath, 'project', project.id, result.fileRef)
         }
       }
       return
@@ -2712,13 +2674,14 @@ function App({ initialInstallState = null }: AppProps) {
         await collaboration.stop()
         setHistory(replaceProjectHistory(loadedProject))
         setAppView('workspace')
-        setSavedPath(result.path ?? 'Opened from desktop picker')
-        if (result.path) {
+        setSavedFileRef(result.fileRef ?? null)
+        setSavedPath(result.fileRef?.displayPath ?? 'Opened from desktop picker')
+        if (result.fileRef) {
           writeRecentProjectSnapshot(loadedProject)
-          pushRecentProject(result.path, 'project', loadedProject.id)
+          pushRecentProject(result.fileRef.displayPath, 'project', loadedProject.id, result.fileRef)
         }
         setStatusMessage('Project loaded from disk')
-        void autoConnectCollaboration(loadedProject, result.path)
+        void autoConnectCollaboration(loadedProject, result.fileRef)
       }
       return
     }
@@ -2736,10 +2699,11 @@ function App({ initialInstallState = null }: AppProps) {
           setHistory(replaceProjectHistory(recovered))
           setAppView('workspace')
           setSavedPath(entry.label)
+          setSavedFileRef(null)
           writeRecentProjectSnapshot(recovered)
           pushRecentProject(entry.label, entry.source, recovered.id)
           setStatusMessage('Opened the latest autosaved version for this recent item')
-          void autoConnectCollaboration(recovered, entry.label)
+          void autoConnectCollaboration(recovered)
           return true
         }
       } else {
@@ -2752,10 +2716,11 @@ function App({ initialInstallState = null }: AppProps) {
             setHistory(replaceProjectHistory(recovered))
             setAppView('workspace')
             setSavedPath(entry.label)
+            setSavedFileRef(null)
             writeRecentProjectSnapshot(recovered)
             pushRecentProject(entry.label, entry.source, recovered.id)
             setStatusMessage('Opened the latest autosaved version for this recent item')
-            void autoConnectCollaboration(recovered, entry.label)
+            void autoConnectCollaboration(recovered)
             return true
           }
         }
@@ -2768,6 +2733,27 @@ function App({ initialInstallState = null }: AppProps) {
   }
 
   const openRecentProject = async (entry: RecentProjectEntry) => {
+    if (desktopBridge.runtime !== 'web' && entry.fileGrantId) {
+      try {
+        const result = await desktopBridge.openProjectRef(entry.fileGrantId)
+        if (result.ok && result.project && result.fileRef) {
+          const loadedProject = hydrateProject(result.project)
+          await collaboration.stop()
+          setHistory(replaceProjectHistory(loadedProject))
+          setAppView('workspace')
+          setSavedFileRef(result.fileRef)
+          setSavedPath(result.fileRef.displayPath)
+          writeRecentProjectSnapshot(loadedProject)
+          pushRecentProject(result.fileRef.displayPath, 'project', loadedProject.id, result.fileRef)
+          setStatusMessage('Recent project loaded')
+          void autoConnectCollaboration(loadedProject, result.fileRef)
+          return
+        }
+      } catch {
+        // Fall back to the Rust-managed project snapshot below.
+      }
+    }
+
     if (entry.projectId) {
       const snapshot = (await desktopBridge.readRecentProjectSnapshots())[
         entry.projectId
@@ -2778,10 +2764,11 @@ function App({ initialInstallState = null }: AppProps) {
         setHistory(replaceProjectHistory(loadedProject))
         setAppView('workspace')
         setSavedPath(entry.label)
+        setSavedFileRef(null)
         writeRecentProjectSnapshot(loadedProject)
         pushRecentProject(entry.label, entry.source, loadedProject.id)
         setStatusMessage('Recent project snapshot loaded')
-        void autoConnectCollaboration(loadedProject, entry.label)
+        void autoConnectCollaboration(loadedProject)
         return
       }
     }
@@ -2794,42 +2781,19 @@ function App({ initialInstallState = null }: AppProps) {
       return
     }
 
-    if (!isLikelyLocalProjectPath(entry.label)) {
-      if (desktopBridge.runtime !== 'web') {
-        setStatusMessage('This recent item was not saved to a project file path yet')
-        return
-      }
-
-      setStatusMessage('Browser mode cannot reopen downloaded files automatically. Use Open Project.')
-      fileInputRef.current?.click()
-      return
-    }
-
     if (desktopBridge.runtime === 'web') {
-      setStatusMessage('Use Open Project to select this recent file')
+      setStatusMessage(
+        'Browser mode cannot reopen downloaded files automatically. Use Open Project.',
+      )
       fileInputRef.current?.click()
       return
     }
 
-    try {
-      const result = await desktopBridge.openProjectPath(entry.label)
-      if (result.ok && result.project) {
-        const loadedProject = hydrateProject(result.project)
-        await collaboration.stop()
-        setHistory(replaceProjectHistory(loadedProject))
-        setAppView('workspace')
-        setSavedPath(result.path ?? entry.label)
-        writeRecentProjectSnapshot(loadedProject)
-        pushRecentProject(result.path ?? entry.label, 'project', loadedProject.id)
-        setStatusMessage('Recent project loaded')
-        void autoConnectCollaboration(loadedProject, result.path ?? entry.label)
-        return
-      }
-
-      setStatusMessage(result.error ?? 'Could not open recent project')
-    } catch {
-      setStatusMessage('Could not open recent project. The file may have moved or been deleted.')
-    }
+    setStatusMessage(
+      entry.fileGrantId
+        ? 'Could not reopen the recent project. Use Open Project to select it again.'
+        : 'This older recent item has no secure file reference. Its snapshot was unavailable; use Open Project.',
+    )
   }
 
   const onProjectFilePicked = (event: ChangeEvent<HTMLInputElement>) => {
@@ -2856,6 +2820,7 @@ function App({ initialInstallState = null }: AppProps) {
         setHistory(replaceProjectHistory(loadedProject))
         setAppView('workspace')
         setSavedPath(selectedFile.name)
+        setSavedFileRef(null)
         writeRecentProjectSnapshot(loadedProject)
         pushRecentProject(selectedFile.name, 'project', loadedProject.id)
         setStatusMessage('Project loaded from local file')
@@ -2877,6 +2842,7 @@ function App({ initialInstallState = null }: AppProps) {
     setActiveTab('draft')
     setPreviewPageIndex(0)
     setSavedPath('Autosave only')
+    setSavedFileRef(null)
     writeRecentProjectSnapshot(fresh)
     pushRecentProject(fresh.meta.title, 'project', fresh.id)
     setStatusMessage('Started a new project')
@@ -3032,6 +2998,7 @@ function App({ initialInstallState = null }: AppProps) {
       setCollaborationJoinStatus('Project synced. Choose where to save it.')
 
       let nextSavedPath = `${hydrated.meta.title || 'untitled'}.msproj.json`
+      let nextSavedFileRef: ProjectFileRef | null = null
       if (desktopBridge.runtime !== 'web') {
         const saveResult = await desktopBridge.saveProject(
           hydrated,
@@ -3042,7 +3009,9 @@ function App({ initialInstallState = null }: AppProps) {
           setCollaborationJoinStatus('Collaboration join cancelled')
           return
         }
-        nextSavedPath = saveResult.path ?? 'Saved with desktop file picker'
+        nextSavedFileRef = saveResult.fileRef ?? null
+        nextSavedPath =
+          saveResult.fileRef?.displayPath ?? 'Saved with desktop file picker'
       } else {
         localStorage.setItem(autosaveKey, JSON.stringify(hydrated))
         triggerDownload(
@@ -3058,8 +3027,14 @@ function App({ initialInstallState = null }: AppProps) {
       setActiveTab('draft')
       setPreviewPageIndex(0)
       setSavedPath(nextSavedPath)
+      setSavedFileRef(nextSavedFileRef)
       writeRecentProjectSnapshot(hydrated)
-      pushRecentProject(nextSavedPath, 'project', hydrated.id)
+      pushRecentProject(
+        nextSavedPath,
+        'project',
+        hydrated.id,
+        nextSavedFileRef ?? undefined,
+      )
       setStartScreenInviteInput('')
       setCollaborationJoinStatus('')
       setStatusMessage('Saved local collaboration copy.')
@@ -3123,6 +3098,7 @@ function App({ initialInstallState = null }: AppProps) {
     void collaboration.stop()
     setHistory(replaceProjectHistory(hydrated))
     setAppView('workspace')
+    setSavedFileRef(null)
     writeRecentProjectSnapshot(hydrated)
     if (path) {
       setSavedPath(path)
@@ -3139,7 +3115,7 @@ function App({ initialInstallState = null }: AppProps) {
     const warningDetail = warnings[0]?.message ? ` - ${warnings[0].message}` : ''
     setStatusMessage(`Imported from ${sourceLabel}${warningSuffix}${warningDetail}`)
     if (hasCollaborationMeta(hydrated)) {
-      void autoConnectCollaboration(hydrated, path)
+      void autoConnectCollaboration(hydrated)
     }
   }
 
@@ -3154,7 +3130,12 @@ function App({ initialInstallState = null }: AppProps) {
         }
 
         const parsed = importFountainProject(result.content)
-        applyImportedProject(parsed.data, 'Fountain', parsed.warnings, result.path)
+        applyImportedProject(
+          parsed.data,
+          'Fountain',
+          parsed.warnings,
+          result.displayPath,
+        )
         return
       }
 
@@ -3183,7 +3164,12 @@ function App({ initialInstallState = null }: AppProps) {
         }
 
         const parsed = importFdxProject(result.content)
-        applyImportedProject(parsed.data, 'FDX', parsed.warnings, result.path)
+        applyImportedProject(
+          parsed.data,
+          'FDX',
+          parsed.warnings,
+          result.displayPath,
+        )
         return
       }
 
@@ -3233,7 +3219,12 @@ function App({ initialInstallState = null }: AppProps) {
         }
 
         const parsed = await importDocxProject(base64ToArrayBuffer(result.base64))
-        applyImportedProject(parsed.data, 'DOCX', parsed.warnings, result.path)
+        applyImportedProject(
+          parsed.data,
+          'DOCX',
+          parsed.warnings,
+          result.displayPath,
+        )
         return
       }
 
@@ -5315,9 +5306,9 @@ function App({ initialInstallState = null }: AppProps) {
                   className="home-recent-item"
                   onClick={() => void openRecentProject(entry)}
                   title={
-                    isLikelyLocalProjectPath(entry.label)
+                    entry.fileGrantId
                       ? 'Open recent project'
-                      : 'Open Project may be required'
+                      : 'Open the saved snapshot or select the project again'
                   }
                 >
                   <strong>{entry.label}</strong>

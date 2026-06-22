@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-project-export-pdf"
+description = "Enables the project_export_pdf command without any pre-configured scope."
+commands.allow = ["project_export_pdf"]
+
+[[permission]]
+identifier = "deny-project-export-pdf"
+description = "Denies the project_export_pdf command without any pre-configured scope."
+commands.deny = ["project_export_pdf"]

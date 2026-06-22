@@ -1,4 +1,5 @@
 mod commands;
+mod file_grants;
 mod lan;
 mod legacy;
 mod migration;
@@ -11,8 +12,8 @@ use commands::{
     collaboration_lan_transport_open, collaboration_lan_transport_send, installation_get_state,
     installation_set_tutorial_completed, project_autosave, project_export_docx, project_export_fdx,
     project_export_fountain, project_export_pdf, project_import_docx, project_import_fdx,
-    project_import_fountain, project_open_file, project_open_path, project_read_autosave,
-    project_read_recent_snapshots, project_save_file, project_save_path,
+    project_import_fountain, project_open_file, project_open_ref, project_read_autosave,
+    project_read_recent_snapshots, project_save_file, project_save_ref,
     project_write_recent_snapshot,
 };
 use lan::{LanRelayState, LanTransportState};
@@ -30,9 +31,9 @@ pub fn run() {
             project_read_recent_snapshots,
             project_write_recent_snapshot,
             project_save_file,
-            project_save_path,
+            project_save_ref,
             project_open_file,
-            project_open_path,
+            project_open_ref,
             project_export_fountain,
             project_import_fountain,
             project_import_fdx,

@@ -12,7 +12,10 @@ describe('createTauriDesktopBridge', () => {
       if (command === 'project_read_autosave') {
         return { ok: true, project: null }
       }
-      return { ok: true, path: 'result-path' }
+      return {
+        ok: true,
+        fileRef: { grantId: 'grant-1', displayPath: 'result-path' },
+      }
     })
     const bridge = createTauriDesktopBridge(invoke as unknown as TauriInvoker)
     const project = { id: 'project-1' } as ScriptProject
@@ -22,9 +25,9 @@ describe('createTauriDesktopBridge', () => {
     await bridge.readRecentProjectSnapshots()
     await bridge.writeRecentProjectSnapshot(project)
     await bridge.saveProject(project, 'Draft')
-    await bridge.saveProjectPath('draft.msproj.json', project)
+    await bridge.saveProjectRef('grant-1', project)
     await bridge.openProject()
-    await bridge.openProjectPath('draft.msproj.json')
+    await bridge.openProjectRef('grant-1')
     await bridge.exportFountain('Draft', 'INT. ROOM - DAY')
     await bridge.importFountain()
     await bridge.importFdx()
@@ -39,9 +42,9 @@ describe('createTauriDesktopBridge', () => {
       'project_read_recent_snapshots',
       'project_write_recent_snapshot',
       'project_save_file',
-      'project_save_path',
+      'project_save_ref',
       'project_open_file',
-      'project_open_path',
+      'project_open_ref',
       'project_export_fountain',
       'project_import_fountain',
       'project_import_fdx',
@@ -50,9 +53,12 @@ describe('createTauriDesktopBridge', () => {
       'project_export_docx',
       'project_export_pdf',
     ])
-    expect(invoke).toHaveBeenCalledWith('project_save_path', {
-      filePath: 'draft.msproj.json',
+    expect(invoke).toHaveBeenCalledWith('project_save_ref', {
+      grantId: 'grant-1',
       project,
+    })
+    expect(invoke).toHaveBeenCalledWith('project_open_ref', {
+      grantId: 'grant-1',
     })
   })
 

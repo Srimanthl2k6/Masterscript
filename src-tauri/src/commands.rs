@@ -1,10 +1,11 @@
+use crate::file_grants::FileGrantRegistry;
 use crate::lan::{self, LanRelayState, LanTransportState};
 use crate::legacy::InstallState;
 use crate::migration::{self, BootstrapInstallationResult};
 use crate::models::{
     AutosaveReadResult, BinaryImportResult, LanHostOptions, LanHostResult, LanJoinOptions,
     LanJoinResult, LanTransportEvent, LanTransportOpenOptions, LanTransportOpenResult,
-    OpenProjectResult, OperationResult, TextImportResult,
+    OpenProjectResult, OperationResult, ProjectFileRef, TextImportResult,
 };
 use crate::persistence::{
     read_json_value, write_bytes_atomic, write_compact_json_atomic, write_json_atomic,
@@ -12,7 +13,6 @@ use crate::persistence::{
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use serde_json::Value;
-use std::env;
 use std::path::{Path, PathBuf};
 use tauri::ipc::Channel;
 use tauri::{Manager, State};
@@ -44,16 +44,6 @@ fn normalize_file_name(value: &str) -> String {
     }
 }
 
-fn absolute_path(path: &str) -> Result<PathBuf, String> {
-    let path = PathBuf::from(path);
-    if path.is_absolute() {
-        return Ok(path);
-    }
-    env::current_dir()
-        .map(|directory| directory.join(path))
-        .map_err(|error| error.to_string())
-}
-
 fn autosave_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
@@ -68,10 +58,21 @@ fn recent_project_snapshots_path(app: &tauri::AppHandle) -> Result<PathBuf, Stri
         .map_err(|error| error.to_string())
 }
 
-fn save_json(path: &Path, project: &Value) -> OperationResult {
-    match write_json_atomic(path, project) {
-        Ok(()) => OperationResult::success(Some(path.to_string_lossy().into_owned())),
-        Err(error) => OperationResult::failure(error.to_string()),
+fn save_json(path: &Path, project: &Value) -> Result<(), String> {
+    write_json_atomic(path, project).map_err(|error| error.to_string())
+}
+
+fn open_project_from_ref(
+    registry: &FileGrantRegistry,
+    file_ref: ProjectFileRef,
+) -> OpenProjectResult {
+    let path = match registry.resolve_existing(&file_ref.grant_id) {
+        Ok(path) => path,
+        Err(error) => return OpenProjectResult::failure(error.to_string()),
+    };
+    match read_json_value(&path) {
+        Ok(project) => OpenProjectResult::success(project, file_ref),
+        Err(error) => OpenProjectResult::failure(error.to_string()),
     }
 }
 
@@ -85,7 +86,7 @@ async fn choose_text_file(title: &str, filter_name: &str, extensions: &[&str]) -
         return TextImportResult {
             ok: false,
             content: None,
-            path: None,
+            display_path: None,
             cancelled: Some(true),
             error: None,
         };
@@ -95,14 +96,14 @@ async fn choose_text_file(title: &str, filter_name: &str, extensions: &[&str]) -
         Ok(content) => TextImportResult {
             ok: true,
             content: Some(content),
-            path: Some(path.to_string_lossy().into_owned()),
+            display_path: Some(path.to_string_lossy().into_owned()),
             cancelled: None,
             error: None,
         },
         Err(error) => TextImportResult {
             ok: false,
             content: None,
-            path: None,
+            display_path: None,
             cancelled: None,
             error: Some(error.to_string()),
         },
@@ -127,7 +128,7 @@ async fn export_text(
     };
     let path = file.path().to_owned();
     match write_bytes_atomic(&path, content.as_bytes()) {
-        Ok(()) => OperationResult::success(Some(path.to_string_lossy().into_owned())),
+        Ok(()) => OperationResult::success(),
         Err(error) => OperationResult::failure(error.to_string()),
     }
 }
@@ -154,7 +155,7 @@ async fn export_binary(
     };
     let path = file.path().to_owned();
     match write_bytes_atomic(&path, &bytes) {
-        Ok(()) => OperationResult::success(Some(path.to_string_lossy().into_owned())),
+        Ok(()) => OperationResult::success(),
         Err(error) => OperationResult::failure(error.to_string()),
     }
 }
@@ -163,7 +164,7 @@ async fn export_binary(
 pub fn project_autosave(app: tauri::AppHandle, project: Value) -> OperationResult {
     match autosave_path(&app) {
         Ok(path) => match write_compact_json_atomic(&path, &project) {
-            Ok(()) => OperationResult::success(Some(path.to_string_lossy().into_owned())),
+            Ok(()) => OperationResult::success(),
             Err(error) => OperationResult::failure(error.to_string()),
         },
         Err(error) => OperationResult::failure(error),
@@ -245,13 +246,17 @@ pub fn project_write_recent_snapshot(app: tauri::AppHandle, project: Value) -> O
     let snapshots = serde_json::Map::from_iter(entries);
 
     match write_compact_json_atomic(&path, &Value::Object(snapshots)) {
-        Ok(()) => OperationResult::success(Some(path.to_string_lossy().into_owned())),
+        Ok(()) => OperationResult::success(),
         Err(error) => OperationResult::failure(error.to_string()),
     }
 }
 
 #[tauri::command]
-pub async fn project_save_file(project: Value, title: String) -> OperationResult {
+pub async fn project_save_file(
+    app: tauri::AppHandle,
+    project: Value,
+    title: String,
+) -> OperationResult {
     let default_name = format!("{}.msproj.json", normalize_file_name(&title));
     let selected = rfd::AsyncFileDialog::new()
         .set_title("Save MasterScript project")
@@ -259,76 +264,85 @@ pub async fn project_save_file(project: Value, title: String) -> OperationResult
         .add_filter("JSON Files", &["json"])
         .save_file()
         .await;
-    selected
-        .map(|file| save_json(file.path(), &project))
-        .unwrap_or_else(OperationResult::cancelled)
-}
-
-#[tauri::command]
-pub fn project_save_path(file_path: String, project: Value) -> OperationResult {
-    let path = match absolute_path(&file_path) {
-        Ok(path) => path,
-        Err(error) => return OperationResult::failure(error),
+    let Some(file) = selected else {
+        return OperationResult::cancelled();
     };
-    if !path
-        .to_string_lossy()
-        .to_ascii_lowercase()
-        .ends_with(".msproj.json")
-    {
-        return OperationResult::failure("Project path must end with .msproj.json");
+    let mut registry = match FileGrantRegistry::load_for_app(&app) {
+        Ok(registry) => registry,
+        Err(error) => return OperationResult::failure(error.to_string()),
+    };
+    let file_ref = match registry.issue_save(file.path()) {
+        Ok(file_ref) => file_ref,
+        Err(error) => return OperationResult::failure(error.to_string()),
+    };
+    match save_json(
+        &match registry.resolve_for_write(&file_ref.grant_id) {
+            Ok(path) => path,
+            Err(error) => return OperationResult::failure(error.to_string()),
+        },
+        &project,
+    ) {
+        Ok(()) => OperationResult::success_with_file_ref(file_ref),
+        Err(error) => OperationResult::failure(error),
     }
-    save_json(&path, &project)
 }
 
 #[tauri::command]
-pub async fn project_open_file() -> OpenProjectResult {
+pub fn project_save_ref(
+    app: tauri::AppHandle,
+    grant_id: String,
+    project: Value,
+) -> OperationResult {
+    let registry = match FileGrantRegistry::load_for_app(&app) {
+        Ok(registry) => registry,
+        Err(error) => return OperationResult::failure(error.to_string()),
+    };
+    let path = match registry.resolve_for_write(&grant_id) {
+        Ok(path) => path,
+        Err(error) => return OperationResult::failure(error.to_string()),
+    };
+    let file_ref = match registry.file_ref(&grant_id) {
+        Ok(file_ref) => file_ref,
+        Err(error) => return OperationResult::failure(error.to_string()),
+    };
+    match save_json(&path, &project) {
+        Ok(()) => OperationResult::success_with_file_ref(file_ref),
+        Err(error) => OperationResult::failure(error),
+    }
+}
+
+#[tauri::command]
+pub async fn project_open_file(app: tauri::AppHandle) -> OpenProjectResult {
     let selected = rfd::AsyncFileDialog::new()
         .set_title("Open MasterScript project")
         .add_filter("JSON Files", &["json"])
         .pick_file()
         .await;
     let Some(file) = selected else {
-        return OpenProjectResult {
-            ok: false,
-            project: None,
-            path: None,
-            cancelled: Some(true),
-            error: None,
-        };
+        return OpenProjectResult::cancelled();
     };
-    project_open_path(file.path().to_string_lossy().into_owned())
+    let mut registry = match FileGrantRegistry::load_for_app(&app) {
+        Ok(registry) => registry,
+        Err(error) => return OpenProjectResult::failure(error.to_string()),
+    };
+    let file_ref = match registry.issue_existing(file.path()) {
+        Ok(file_ref) => file_ref,
+        Err(error) => return OpenProjectResult::failure(error.to_string()),
+    };
+    open_project_from_ref(&registry, file_ref)
 }
 
 #[tauri::command]
-pub fn project_open_path(file_path: String) -> OpenProjectResult {
-    let path = match absolute_path(&file_path) {
-        Ok(path) => path,
-        Err(error) => {
-            return OpenProjectResult {
-                ok: false,
-                project: None,
-                path: None,
-                cancelled: None,
-                error: Some(error),
-            }
-        }
+pub fn project_open_ref(app: tauri::AppHandle, grant_id: String) -> OpenProjectResult {
+    let registry = match FileGrantRegistry::load_for_app(&app) {
+        Ok(registry) => registry,
+        Err(error) => return OpenProjectResult::failure(error.to_string()),
     };
-    match read_json_value(&path) {
-        Ok(project) => OpenProjectResult {
-            ok: true,
-            project: Some(project),
-            path: Some(path.to_string_lossy().into_owned()),
-            cancelled: None,
-            error: None,
-        },
-        Err(error) => OpenProjectResult {
-            ok: false,
-            project: None,
-            path: None,
-            cancelled: None,
-            error: Some(error.to_string()),
-        },
-    }
+    let file_ref = match registry.file_ref(&grant_id) {
+        Ok(file_ref) => file_ref,
+        Err(error) => return OpenProjectResult::failure(error.to_string()),
+    };
+    open_project_from_ref(&registry, file_ref)
 }
 
 #[tauri::command]
@@ -376,7 +390,7 @@ pub async fn project_import_docx() -> BinaryImportResult {
         return BinaryImportResult {
             ok: false,
             base64: None,
-            path: None,
+            display_path: None,
             cancelled: Some(true),
             error: None,
         };
@@ -386,14 +400,14 @@ pub async fn project_import_docx() -> BinaryImportResult {
         Ok(bytes) => BinaryImportResult {
             ok: true,
             base64: Some(STANDARD.encode(bytes)),
-            path: Some(path.to_string_lossy().into_owned()),
+            display_path: Some(path.to_string_lossy().into_owned()),
             cancelled: None,
             error: None,
         },
         Err(error) => BinaryImportResult {
             ok: false,
             base64: None,
-            path: None,
+            display_path: None,
             cancelled: None,
             error: Some(error.to_string()),
         },
@@ -470,7 +484,7 @@ pub async fn collaboration_lan_stop(
 ) -> Result<OperationResult, String> {
     transport_state.stop_all().await;
     state.stop().await;
-    Ok(OperationResult::success(None))
+    Ok(OperationResult::success())
 }
 
 #[tauri::command]

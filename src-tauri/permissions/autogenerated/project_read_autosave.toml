@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-project-read-autosave"
+description = "Enables the project_read_autosave command without any pre-configured scope."
+commands.allow = ["project_read_autosave"]
+
+[[permission]]
+identifier = "deny-project-read-autosave"
+description = "Denies the project_read_autosave command without any pre-configured scope."
+commands.deny = ["project_read_autosave"]

@@ -3,8 +3,15 @@ import type {
   DesktopBridge,
   DesktopNativeApi,
   InstallState,
+  LegacyBinaryImportResult,
+  LegacyOpenProjectResult,
+  LegacyOperationResult,
+  LegacyTextImportResult,
   MigrationManifestV1,
+  OpenProjectResult,
   OperationResult,
+  TextImportResult,
+  BinaryImportResult,
 } from './types'
 import {
   createTauriDesktopBridge,
@@ -20,6 +27,45 @@ const unavailableMessage = 'This operation is available only in the desktop app.
 const unavailable = async (): Promise<OperationResult> => ({
   ok: false,
   error: unavailableMessage,
+})
+
+const legacyFileRef = (path: string | undefined) =>
+  path ? { grantId: path, displayPath: path } : undefined
+
+const normalizeLegacyOperation = (
+  result: LegacyOperationResult,
+): OperationResult => ({
+  ok: result.ok,
+  fileRef: legacyFileRef(result.path),
+  cancelled: result.cancelled,
+  error: result.error,
+})
+
+const normalizeLegacyOpenProject = (
+  result: LegacyOpenProjectResult,
+): OpenProjectResult => ({
+  ...normalizeLegacyOperation(result),
+  project: result.project,
+})
+
+const normalizeLegacyTextImport = (
+  result: LegacyTextImportResult,
+): TextImportResult => ({
+  ok: result.ok,
+  content: result.content,
+  displayPath: result.path,
+  cancelled: result.cancelled,
+  error: result.error,
+})
+
+const normalizeLegacyBinaryImport = (
+  result: LegacyBinaryImportResult,
+): BinaryImportResult => ({
+  ok: result.ok,
+  base64: result.base64,
+  displayPath: result.path,
+  cancelled: result.cancelled,
+  error: result.error,
 })
 
 const readBrowserRecentProjectSnapshots = (): Record<string, ScriptProject> => {
@@ -82,9 +128,9 @@ const createNonElectronBridge = (runtime: 'web' | 'tauri'): DesktopBridge => ({
   writeRecentProjectSnapshot: async (project) =>
     writeBrowserRecentProjectSnapshot(project),
   saveProject: unavailable,
-  saveProjectPath: unavailable,
+  saveProjectRef: unavailable,
   openProject: unavailable,
-  openProjectPath: unavailable,
+  openProjectRef: unavailable,
   exportFountain: unavailable,
   importFountain: unavailable,
   importFdx: unavailable,
@@ -132,15 +178,19 @@ const createElectronBridge = (api: DesktopNativeApi): DesktopBridge => ({
   writeRecentProjectSnapshot: (project) =>
     api.writeRecentProjectSnapshot?.(project) ??
     Promise.resolve(writeBrowserRecentProjectSnapshot(project)),
-  saveProject: (project, title) => api.saveProject(project, title),
-  saveProjectPath: (filePath, project) => api.saveProjectPath(filePath, project),
-  openProject: () => api.openProject(),
-  openProjectPath: (filePath) => api.openProjectPath(filePath),
+  saveProject: async (project, title) =>
+    normalizeLegacyOperation(await api.saveProject(project, title)),
+  saveProjectRef: async (grantId, project) =>
+    normalizeLegacyOperation(await api.saveProjectPath(grantId, project)),
+  openProject: async () => normalizeLegacyOpenProject(await api.openProject()),
+  openProjectRef: async (grantId) =>
+    normalizeLegacyOpenProject(await api.openProjectPath(grantId)),
   exportFountain: (title, content) => api.exportFountain(title, content),
-  importFountain: () => api.importFountain(),
-  importFdx: () => api.importFdx(),
+  importFountain: async () =>
+    normalizeLegacyTextImport(await api.importFountain()),
+  importFdx: async () => normalizeLegacyTextImport(await api.importFdx()),
   exportFdx: (title, content) => api.exportFdx(title, content),
-  importDocx: () => api.importDocx(),
+  importDocx: async () => normalizeLegacyBinaryImport(await api.importDocx()),
   exportDocx: (title, base64) => api.exportDocx(title, base64),
   exportPdf: (title, base64) => api.exportPdf(title, base64),
   hostLanCollaboration: (options) => api.hostLanCollaboration(options),

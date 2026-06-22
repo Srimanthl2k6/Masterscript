@@ -7,6 +7,7 @@ export interface RecentProjectEntry {
   source: 'project' | 'import'
   updatedAt: string
   projectId?: string
+  fileGrantId?: string
 }
 
 export interface InstallState {
@@ -82,9 +83,14 @@ export interface LanTransportEvent {
   error?: string
 }
 
+export interface ProjectFileRef {
+  grantId: string
+  displayPath: string
+}
+
 export interface OperationResult {
   ok: boolean
-  path?: string
+  fileRef?: ProjectFileRef
   cancelled?: boolean
   error?: string
 }
@@ -95,9 +101,27 @@ export interface OpenProjectResult extends OperationResult {
 
 export interface TextImportResult extends OperationResult {
   content?: string
+  displayPath?: string
 }
 
 export interface BinaryImportResult extends OperationResult {
+  base64?: string
+  displayPath?: string
+}
+
+export interface LegacyOperationResult extends Omit<OperationResult, 'fileRef'> {
+  path?: string
+}
+
+export interface LegacyOpenProjectResult extends LegacyOperationResult {
+  project?: ScriptProject
+}
+
+export interface LegacyTextImportResult extends LegacyOperationResult {
+  content?: string
+}
+
+export interface LegacyBinaryImportResult extends LegacyOperationResult {
   base64?: string
 }
 
@@ -113,15 +137,18 @@ export interface DesktopNativeApi {
   readAutosave(): Promise<AutosaveReadResult>
   readRecentProjectSnapshots?(): Promise<Record<string, ScriptProject>>
   writeRecentProjectSnapshot?(project: ScriptProject): Promise<OperationResult>
-  saveProject(project: ScriptProject, title: string): Promise<OperationResult>
-  saveProjectPath(filePath: string, project: ScriptProject): Promise<OperationResult>
-  openProject(): Promise<OpenProjectResult>
-  openProjectPath(filePath: string): Promise<OpenProjectResult>
+  saveProject(project: ScriptProject, title: string): Promise<LegacyOperationResult>
+  saveProjectPath(
+    filePath: string,
+    project: ScriptProject,
+  ): Promise<LegacyOperationResult>
+  openProject(): Promise<LegacyOpenProjectResult>
+  openProjectPath(filePath: string): Promise<LegacyOpenProjectResult>
   exportFountain(title: string, content: string): Promise<OperationResult>
-  importFountain(): Promise<TextImportResult>
-  importFdx(): Promise<TextImportResult>
+  importFountain(): Promise<LegacyTextImportResult>
+  importFdx(): Promise<LegacyTextImportResult>
   exportFdx(title: string, content: string): Promise<OperationResult>
-  importDocx(): Promise<BinaryImportResult>
+  importDocx(): Promise<LegacyBinaryImportResult>
   exportDocx(title: string, base64: string): Promise<OperationResult>
   exportPdf(title: string, base64: string): Promise<OperationResult>
   hostLanCollaboration(
@@ -146,8 +173,29 @@ export interface DesktopNativeApi {
   bootstrapInstallation?(): Promise<BootstrapInstallationResult>
 }
 
-export interface DesktopBridge extends Omit<DesktopNativeApi, 'isElectron'> {
+export interface DesktopBridge
+  extends Omit<
+    DesktopNativeApi,
+    | 'isElectron'
+    | 'saveProject'
+    | 'saveProjectPath'
+    | 'openProject'
+    | 'openProjectPath'
+    | 'importFountain'
+    | 'importFdx'
+    | 'importDocx'
+  > {
   runtime: DesktopRuntime
+  saveProject(project: ScriptProject, title: string): Promise<OperationResult>
+  saveProjectRef(
+    grantId: string,
+    project: ScriptProject,
+  ): Promise<OperationResult>
+  openProject(): Promise<OpenProjectResult>
+  openProjectRef(grantId: string): Promise<OpenProjectResult>
+  importFountain(): Promise<TextImportResult>
+  importFdx(): Promise<TextImportResult>
+  importDocx(): Promise<BinaryImportResult>
   readRecentProjectSnapshots(): Promise<Record<string, ScriptProject>>
   writeRecentProjectSnapshot(project: ScriptProject): Promise<OperationResult>
   exportMigrationManifest(manifest: MigrationManifestV1): Promise<OperationResult>

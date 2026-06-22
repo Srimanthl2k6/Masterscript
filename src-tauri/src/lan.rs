@@ -846,7 +846,7 @@ impl LanTransportState {
             return OperationResult::failure("LAN transport session was not found");
         };
         match session.sender.try_send(Message::Text(payload.into())) {
-            Ok(()) => OperationResult::success(None),
+            Ok(()) => OperationResult::success(),
             Err(_) => OperationResult::failure("LAN transport queue is full or disconnected"),
         }
     }
@@ -857,7 +857,7 @@ impl LanTransportState {
             let _ = session.sender.try_send(Message::Close(None));
             session.task.abort();
         }
-        OperationResult::success(None)
+        OperationResult::success()
     }
 
     pub async fn stop_all(&self) {

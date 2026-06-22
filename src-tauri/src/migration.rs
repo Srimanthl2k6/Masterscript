@@ -1,3 +1,4 @@
+use crate::file_grants::FileGrantRegistry;
 use crate::legacy::{self, InstallKind, InstallState};
 use crate::persistence::{read_json, read_json_value, write_json_atomic};
 use serde::{Deserialize, Serialize};
@@ -112,11 +113,22 @@ fn import_recent_project_snapshots_once(
 }
 
 fn existing_installation(
+    app_directory: &Path,
     install_state_path: &Path,
     imported_manifest_path: &Path,
 ) -> Option<BootstrapInstallationResult> {
     let persisted = read_json::<PersistedInstallState>(install_state_path).ok()?;
-    let manifest = read_valid_manifest(imported_manifest_path);
+    let mut manifest = read_valid_manifest(imported_manifest_path);
+    if let Some(value) = manifest.as_mut() {
+        if let Ok(mut grants) = FileGrantRegistry::load_in_directory(app_directory) {
+            if grants
+                .migrate_recent_projects(&mut value.recent_projects)
+                .is_ok()
+            {
+                let _ = write_json_atomic(imported_manifest_path, value);
+            }
+        }
+    }
     Some(BootstrapInstallationResult {
         install_state: InstallState {
             kind: InstallKind::ExistingTauri,
@@ -133,7 +145,9 @@ pub fn bootstrap(app: &tauri::AppHandle) -> io::Result<BootstrapInstallationResu
     let install_state_path = app_directory.join(INSTALL_STATE_FILE);
     let imported_manifest_path = app_directory.join(IMPORTED_MANIFEST_FILE);
 
-    if let Some(existing) = existing_installation(&install_state_path, &imported_manifest_path) {
+    if let Some(existing) =
+        existing_installation(&app_directory, &install_state_path, &imported_manifest_path)
+    {
         return Ok(existing);
     }
 
@@ -144,13 +158,16 @@ pub fn bootstrap(app: &tauri::AppHandle) -> io::Result<BootstrapInstallationResu
         .collect::<Vec<_>>();
     let legacy_directory = candidates.iter().find(|path| path.is_dir()).cloned();
     let manifest_match = find_legacy_manifest(&candidates);
-    let manifest = manifest_match.as_ref().map(|(_, value)| value.clone());
+    let mut manifest = manifest_match.as_ref().map(|(_, value)| value.clone());
     let manifest_directory = manifest_match.as_ref().map(|(path, _)| path.as_path());
     let evidence_directory = manifest_directory.or(legacy_directory.as_deref());
     let legacy_evidence_exists = evidence_directory.is_some();
 
     if legacy_evidence_exists {
-        if let Some(value) = manifest.as_ref() {
+        if let Some(value) = manifest.as_mut() {
+            if let Ok(mut grants) = FileGrantRegistry::load_in_directory(&app_directory) {
+                grants.migrate_recent_projects(&mut value.recent_projects)?;
+            }
             write_json_atomic(&imported_manifest_path, value)?;
         }
         copy_valid_autosave_once(&app_directory, evidence_directory, manifest.as_ref());

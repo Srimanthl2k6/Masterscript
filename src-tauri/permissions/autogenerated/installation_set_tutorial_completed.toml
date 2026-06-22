@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-installation-set-tutorial-completed"
+description = "Enables the installation_set_tutorial_completed command without any pre-configured scope."
+commands.allow = ["installation_set_tutorial_completed"]
+
+[[permission]]
+identifier = "deny-installation-set-tutorial-completed"
+description = "Denies the installation_set_tutorial_completed command without any pre-configured scope."
+commands.deny = ["installation_set_tutorial_completed"]
