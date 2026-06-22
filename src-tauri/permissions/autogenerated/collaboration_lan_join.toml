@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-collaboration-lan-join"
+description = "Enables the collaboration_lan_join command without any pre-configured scope."
+commands.allow = ["collaboration_lan_join"]
+
+[[permission]]
+identifier = "deny-collaboration-lan-join"
+description = "Denies the collaboration_lan_join command without any pre-configured scope."
+commands.deny = ["collaboration_lan_join"]

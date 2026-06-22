@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-collaboration-lan-status"
+description = "Enables the collaboration_lan_status command without any pre-configured scope."
+commands.allow = ["collaboration_lan_status"]
+
+[[permission]]
+identifier = "deny-collaboration-lan-status"
+description = "Denies the collaboration_lan_status command without any pre-configured scope."
+commands.deny = ["collaboration_lan_status"]

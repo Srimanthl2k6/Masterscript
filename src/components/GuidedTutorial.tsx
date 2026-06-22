@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { tutorialSteps } from '../lib/tutorial'
+import { isTutorialAdvanceKey, tutorialSteps } from '../lib/tutorial'
 
 interface GuidedTutorialProps {
   stepIndex: number
@@ -59,8 +59,29 @@ export default function GuidedTutorial({
   const panelOnLeft =
     targetRect !== null && targetRect.left > window.innerWidth * 0.55
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isTutorialAdvanceKey(event)) {
+        return
+      }
+
+      event.preventDefault()
+      event.stopPropagation()
+      if (isLastStep) {
+        onFinish()
+      } else {
+        onNext()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true)
+    }
+  }, [isLastStep, onFinish, onNext])
+
   return (
-    <div className="tutorial-layer" role="dialog" aria-modal="true" aria-label="MasterScript tutorial">
+    <div className="tutorial-layer" role="dialog" aria-modal="false" aria-label="MasterScript tutorial">
       <div className="tutorial-dimmer" />
       {targetRect && (
         <div

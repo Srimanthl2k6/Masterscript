@@ -1,18 +1,23 @@
-use crate::lan::{self, LanRelayState};
+use crate::file_grants::FileGrantRegistry;
+use crate::import_security::{
+    read_file_bounded, read_json_value_bounded, read_project_file, validate_docx_archive,
+    validate_project_value, validate_serialized_size, DOCX_COMPRESSED_LIMIT, EXPORT_BINARY_LIMIT,
+    EXPORT_TEXT_LIMIT, MAX_BASE64_EXPORT_BYTES, PROJECT_JSON_LIMIT, TEXT_IMPORT_LIMIT,
+};
+use crate::lan::{self, LanRelayState, LanTransportState};
 use crate::legacy::InstallState;
 use crate::migration::{self, BootstrapInstallationResult};
 use crate::models::{
     AutosaveReadResult, BinaryImportResult, LanHostOptions, LanHostResult, LanJoinOptions,
-    LanJoinResult, OpenProjectResult, OperationResult, TextImportResult,
+    LanJoinResult, LanTransportEvent, LanTransportOpenOptions, LanTransportOpenResult,
+    OpenProjectResult, OperationResult, ProjectFileRef, TextImportResult,
 };
-use crate::persistence::{
-    read_json_value, write_bytes_atomic, write_compact_json_atomic, write_json_atomic,
-};
+use crate::persistence::{write_bytes_atomic, write_compact_json_atomic, write_json_atomic};
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 use serde_json::Value;
-use std::env;
 use std::path::{Path, PathBuf};
+use tauri::ipc::Channel;
 use tauri::{Manager, State};
 
 const AUTOSAVE_FILE: &str = "autosave.msproj.json";
@@ -42,16 +47,6 @@ fn normalize_file_name(value: &str) -> String {
     }
 }
 
-fn absolute_path(path: &str) -> Result<PathBuf, String> {
-    let path = PathBuf::from(path);
-    if path.is_absolute() {
-        return Ok(path);
-    }
-    env::current_dir()
-        .map(|directory| directory.join(path))
-        .map_err(|error| error.to_string())
-}
-
 fn autosave_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
@@ -66,10 +61,22 @@ fn recent_project_snapshots_path(app: &tauri::AppHandle) -> Result<PathBuf, Stri
         .map_err(|error| error.to_string())
 }
 
-fn save_json(path: &Path, project: &Value) -> OperationResult {
-    match write_json_atomic(path, project) {
-        Ok(()) => OperationResult::success(Some(path.to_string_lossy().into_owned())),
-        Err(error) => OperationResult::failure(error.to_string()),
+fn save_json(path: &Path, project: &Value) -> Result<(), String> {
+    validate_project_value(project).map_err(|error| error.to_string())?;
+    write_json_atomic(path, project).map_err(|error| error.to_string())
+}
+
+fn open_project_from_ref(
+    registry: &FileGrantRegistry,
+    file_ref: ProjectFileRef,
+) -> OpenProjectResult {
+    let path = match registry.resolve_existing(&file_ref.grant_id) {
+        Ok(path) => path,
+        Err(error) => return OpenProjectResult::failure(error.to_string()),
+    };
+    match read_project_file(&path) {
+        Ok(project) => OpenProjectResult::success(project, file_ref),
+        Err(error) => OpenProjectResult::failure(error.to_string()),
     }
 }
 
@@ -83,24 +90,43 @@ async fn choose_text_file(title: &str, filter_name: &str, extensions: &[&str]) -
         return TextImportResult {
             ok: false,
             content: None,
-            path: None,
+            display_path: None,
             cancelled: Some(true),
             error: None,
         };
     };
     let path = file.path().to_owned();
-    match tokio::fs::read_to_string(&path).await {
-        Ok(content) => TextImportResult {
-            ok: true,
-            content: Some(content),
-            path: Some(path.to_string_lossy().into_owned()),
+    let read_path = path.clone();
+    let read_result =
+        tokio::task::spawn_blocking(move || read_file_bounded(&read_path, TEXT_IMPORT_LIMIT)).await;
+    match read_result {
+        Ok(Ok(bytes)) => match String::from_utf8(bytes) {
+            Ok(content) => TextImportResult {
+                ok: true,
+                content: Some(content),
+                display_path: Some(path.to_string_lossy().into_owned()),
+                cancelled: None,
+                error: None,
+            },
+            Err(error) => TextImportResult {
+                ok: false,
+                content: None,
+                display_path: None,
+                cancelled: None,
+                error: Some(error.to_string()),
+            },
+        },
+        Ok(Err(error)) => TextImportResult {
+            ok: false,
+            content: None,
+            display_path: None,
             cancelled: None,
-            error: None,
+            error: Some(error.to_string()),
         },
         Err(error) => TextImportResult {
             ok: false,
             content: None,
-            path: None,
+            display_path: None,
             cancelled: None,
             error: Some(error.to_string()),
         },
@@ -114,6 +140,9 @@ async fn export_text(
     default_name: String,
     content: String,
 ) -> OperationResult {
+    if content.len() > EXPORT_TEXT_LIMIT {
+        return OperationResult::failure("Text export exceeds the 20 MiB limit");
+    }
     let selected = rfd::AsyncFileDialog::new()
         .set_title(dialog_title)
         .set_file_name(&default_name)
@@ -125,9 +154,26 @@ async fn export_text(
     };
     let path = file.path().to_owned();
     match write_bytes_atomic(&path, content.as_bytes()) {
-        Ok(()) => OperationResult::success(Some(path.to_string_lossy().into_owned())),
+        Ok(()) => OperationResult::success(),
         Err(error) => OperationResult::failure(error.to_string()),
     }
+}
+
+fn decode_export_payload_with_limit(base64: &str, limit: usize) -> Result<Vec<u8>, String> {
+    let encoded_limit = ((limit + 2) / 3) * 4;
+    if base64.len() > encoded_limit {
+        return Err("Binary export exceeds the 100 MiB limit".into());
+    }
+    let bytes = STANDARD.decode(base64).map_err(|error| error.to_string())?;
+    if bytes.len() > limit {
+        return Err("Binary export exceeds the 100 MiB limit".into());
+    }
+    Ok(bytes)
+}
+
+fn decode_export_payload(base64: &str) -> Result<Vec<u8>, String> {
+    debug_assert_eq!(MAX_BASE64_EXPORT_BYTES, ((EXPORT_BINARY_LIMIT + 2) / 3) * 4);
+    decode_export_payload_with_limit(base64, EXPORT_BINARY_LIMIT)
 }
 
 async fn export_binary(
@@ -137,9 +183,9 @@ async fn export_binary(
     default_name: String,
     base64: String,
 ) -> OperationResult {
-    let bytes = match STANDARD.decode(base64) {
+    let bytes = match decode_export_payload(&base64) {
         Ok(bytes) => bytes,
-        Err(error) => return OperationResult::failure(error.to_string()),
+        Err(error) => return OperationResult::failure(error),
     };
     let selected = rfd::AsyncFileDialog::new()
         .set_title(dialog_title)
@@ -152,16 +198,19 @@ async fn export_binary(
     };
     let path = file.path().to_owned();
     match write_bytes_atomic(&path, &bytes) {
-        Ok(()) => OperationResult::success(Some(path.to_string_lossy().into_owned())),
+        Ok(()) => OperationResult::success(),
         Err(error) => OperationResult::failure(error.to_string()),
     }
 }
 
 #[tauri::command]
 pub fn project_autosave(app: tauri::AppHandle, project: Value) -> OperationResult {
+    if let Err(error) = validate_project_value(&project) {
+        return OperationResult::failure(error.to_string());
+    }
     match autosave_path(&app) {
         Ok(path) => match write_compact_json_atomic(&path, &project) {
-            Ok(()) => OperationResult::success(Some(path.to_string_lossy().into_owned())),
+            Ok(()) => OperationResult::success(),
             Err(error) => OperationResult::failure(error.to_string()),
         },
         Err(error) => OperationResult::failure(error),
@@ -180,7 +229,7 @@ pub fn project_read_autosave(app: tauri::AppHandle) -> AutosaveReadResult {
             }
         }
     };
-    match read_json_value(&path) {
+    match read_project_file(&path) {
         Ok(project) => AutosaveReadResult {
             ok: true,
             project: Some(project),
@@ -202,8 +251,14 @@ pub fn project_read_autosave(app: tauri::AppHandle) -> AutosaveReadResult {
 #[tauri::command]
 pub fn project_read_recent_snapshots(app: tauri::AppHandle) -> Result<Value, String> {
     let path = recent_project_snapshots_path(&app)?;
-    match read_json_value(&path) {
-        Ok(Value::Object(snapshots)) => Ok(Value::Object(snapshots)),
+    match read_json_value_bounded(&path, PROJECT_JSON_LIMIT) {
+        Ok(Value::Object(snapshots)) => {
+            let validated = snapshots
+                .into_iter()
+                .filter(|(_, project)| validate_project_value(project).is_ok())
+                .collect();
+            Ok(Value::Object(validated))
+        }
         Ok(_) => Ok(Value::Object(Default::default())),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             Ok(Value::Object(Default::default()))
@@ -214,6 +269,9 @@ pub fn project_read_recent_snapshots(app: tauri::AppHandle) -> Result<Value, Str
 
 #[tauri::command]
 pub fn project_write_recent_snapshot(app: tauri::AppHandle, project: Value) -> OperationResult {
+    if let Err(error) = validate_project_value(&project) {
+        return OperationResult::failure(error.to_string());
+    }
     let Some(project_id) = project.get("id").and_then(Value::as_str) else {
         return OperationResult::failure("Recent project snapshot is missing an id");
     };
@@ -221,7 +279,7 @@ pub fn project_write_recent_snapshot(app: tauri::AppHandle, project: Value) -> O
         Ok(path) => path,
         Err(error) => return OperationResult::failure(error),
     };
-    let mut snapshots = match read_json_value(&path) {
+    let mut snapshots = match read_json_value_bounded(&path, PROJECT_JSON_LIMIT) {
         Ok(Value::Object(value)) => value,
         _ => Default::default(),
     };
@@ -241,15 +299,24 @@ pub fn project_write_recent_snapshot(app: tauri::AppHandle, project: Value) -> O
     });
     entries.truncate(RECENT_PROJECT_SNAPSHOT_LIMIT);
     let snapshots = serde_json::Map::from_iter(entries);
+    if let Err(error) =
+        validate_serialized_size(&Value::Object(snapshots.clone()), PROJECT_JSON_LIMIT)
+    {
+        return OperationResult::failure(error.to_string());
+    }
 
     match write_compact_json_atomic(&path, &Value::Object(snapshots)) {
-        Ok(()) => OperationResult::success(Some(path.to_string_lossy().into_owned())),
+        Ok(()) => OperationResult::success(),
         Err(error) => OperationResult::failure(error.to_string()),
     }
 }
 
 #[tauri::command]
-pub async fn project_save_file(project: Value, title: String) -> OperationResult {
+pub async fn project_save_file(
+    app: tauri::AppHandle,
+    project: Value,
+    title: String,
+) -> OperationResult {
     let default_name = format!("{}.msproj.json", normalize_file_name(&title));
     let selected = rfd::AsyncFileDialog::new()
         .set_title("Save MasterScript project")
@@ -257,76 +324,85 @@ pub async fn project_save_file(project: Value, title: String) -> OperationResult
         .add_filter("JSON Files", &["json"])
         .save_file()
         .await;
-    selected
-        .map(|file| save_json(file.path(), &project))
-        .unwrap_or_else(OperationResult::cancelled)
-}
-
-#[tauri::command]
-pub fn project_save_path(file_path: String, project: Value) -> OperationResult {
-    let path = match absolute_path(&file_path) {
-        Ok(path) => path,
-        Err(error) => return OperationResult::failure(error),
+    let Some(file) = selected else {
+        return OperationResult::cancelled();
     };
-    if !path
-        .to_string_lossy()
-        .to_ascii_lowercase()
-        .ends_with(".msproj.json")
-    {
-        return OperationResult::failure("Project path must end with .msproj.json");
+    let mut registry = match FileGrantRegistry::load_for_app(&app) {
+        Ok(registry) => registry,
+        Err(error) => return OperationResult::failure(error.to_string()),
+    };
+    let file_ref = match registry.issue_save(file.path()) {
+        Ok(file_ref) => file_ref,
+        Err(error) => return OperationResult::failure(error.to_string()),
+    };
+    match save_json(
+        &match registry.resolve_for_write(&file_ref.grant_id) {
+            Ok(path) => path,
+            Err(error) => return OperationResult::failure(error.to_string()),
+        },
+        &project,
+    ) {
+        Ok(()) => OperationResult::success_with_file_ref(file_ref),
+        Err(error) => OperationResult::failure(error),
     }
-    save_json(&path, &project)
 }
 
 #[tauri::command]
-pub async fn project_open_file() -> OpenProjectResult {
+pub fn project_save_ref(
+    app: tauri::AppHandle,
+    grant_id: String,
+    project: Value,
+) -> OperationResult {
+    let registry = match FileGrantRegistry::load_for_app(&app) {
+        Ok(registry) => registry,
+        Err(error) => return OperationResult::failure(error.to_string()),
+    };
+    let path = match registry.resolve_for_write(&grant_id) {
+        Ok(path) => path,
+        Err(error) => return OperationResult::failure(error.to_string()),
+    };
+    let file_ref = match registry.file_ref(&grant_id) {
+        Ok(file_ref) => file_ref,
+        Err(error) => return OperationResult::failure(error.to_string()),
+    };
+    match save_json(&path, &project) {
+        Ok(()) => OperationResult::success_with_file_ref(file_ref),
+        Err(error) => OperationResult::failure(error),
+    }
+}
+
+#[tauri::command]
+pub async fn project_open_file(app: tauri::AppHandle) -> OpenProjectResult {
     let selected = rfd::AsyncFileDialog::new()
         .set_title("Open MasterScript project")
         .add_filter("JSON Files", &["json"])
         .pick_file()
         .await;
     let Some(file) = selected else {
-        return OpenProjectResult {
-            ok: false,
-            project: None,
-            path: None,
-            cancelled: Some(true),
-            error: None,
-        };
+        return OpenProjectResult::cancelled();
     };
-    project_open_path(file.path().to_string_lossy().into_owned())
+    let mut registry = match FileGrantRegistry::load_for_app(&app) {
+        Ok(registry) => registry,
+        Err(error) => return OpenProjectResult::failure(error.to_string()),
+    };
+    let file_ref = match registry.issue_existing(file.path()) {
+        Ok(file_ref) => file_ref,
+        Err(error) => return OpenProjectResult::failure(error.to_string()),
+    };
+    open_project_from_ref(&registry, file_ref)
 }
 
 #[tauri::command]
-pub fn project_open_path(file_path: String) -> OpenProjectResult {
-    let path = match absolute_path(&file_path) {
-        Ok(path) => path,
-        Err(error) => {
-            return OpenProjectResult {
-                ok: false,
-                project: None,
-                path: None,
-                cancelled: None,
-                error: Some(error),
-            }
-        }
+pub fn project_open_ref(app: tauri::AppHandle, grant_id: String) -> OpenProjectResult {
+    let registry = match FileGrantRegistry::load_for_app(&app) {
+        Ok(registry) => registry,
+        Err(error) => return OpenProjectResult::failure(error.to_string()),
     };
-    match read_json_value(&path) {
-        Ok(project) => OpenProjectResult {
-            ok: true,
-            project: Some(project),
-            path: Some(path.to_string_lossy().into_owned()),
-            cancelled: None,
-            error: None,
-        },
-        Err(error) => OpenProjectResult {
-            ok: false,
-            project: None,
-            path: None,
-            cancelled: None,
-            error: Some(error.to_string()),
-        },
-    }
+    let file_ref = match registry.file_ref(&grant_id) {
+        Ok(file_ref) => file_ref,
+        Err(error) => return OpenProjectResult::failure(error.to_string()),
+    };
+    open_project_from_ref(&registry, file_ref)
 }
 
 #[tauri::command]
@@ -374,24 +450,38 @@ pub async fn project_import_docx() -> BinaryImportResult {
         return BinaryImportResult {
             ok: false,
             base64: None,
-            path: None,
+            display_path: None,
             cancelled: Some(true),
             error: None,
         };
     };
     let path = file.path().to_owned();
-    match tokio::fs::read(&path).await {
-        Ok(bytes) => BinaryImportResult {
+    let read_path = path.clone();
+    let read_result = tokio::task::spawn_blocking(move || {
+        let bytes = read_file_bounded(&read_path, DOCX_COMPRESSED_LIMIT)?;
+        validate_docx_archive(&bytes)?;
+        Ok::<_, std::io::Error>(bytes)
+    })
+    .await;
+    match read_result {
+        Ok(Ok(bytes)) => BinaryImportResult {
             ok: true,
             base64: Some(STANDARD.encode(bytes)),
-            path: Some(path.to_string_lossy().into_owned()),
+            display_path: Some(path.to_string_lossy().into_owned()),
             cancelled: None,
             error: None,
+        },
+        Ok(Err(error)) => BinaryImportResult {
+            ok: false,
+            base64: None,
+            display_path: None,
+            cancelled: None,
+            error: Some(error.to_string()),
         },
         Err(error) => BinaryImportResult {
             ok: false,
             base64: None,
-            path: None,
+            display_path: None,
             cancelled: None,
             error: Some(error.to_string()),
         },
@@ -436,11 +526,39 @@ pub async fn collaboration_lan_join(options: LanJoinOptions) -> LanJoinResult {
 }
 
 #[tauri::command]
+pub async fn collaboration_lan_transport_open(
+    state: State<'_, LanTransportState>,
+    options: LanTransportOpenOptions,
+    on_event: Channel<LanTransportEvent>,
+) -> Result<LanTransportOpenResult, String> {
+    Ok(state.open(options, on_event).await)
+}
+
+#[tauri::command]
+pub async fn collaboration_lan_transport_send(
+    state: State<'_, LanTransportState>,
+    session_id: String,
+    payload: String,
+) -> Result<OperationResult, String> {
+    Ok(state.send(&session_id, payload).await)
+}
+
+#[tauri::command]
+pub async fn collaboration_lan_transport_close(
+    state: State<'_, LanTransportState>,
+    session_id: String,
+) -> Result<OperationResult, String> {
+    Ok(state.close(&session_id).await)
+}
+
+#[tauri::command]
 pub async fn collaboration_lan_stop(
     state: State<'_, LanRelayState>,
+    transport_state: State<'_, LanTransportState>,
 ) -> Result<OperationResult, String> {
+    transport_state.stop_all().await;
     state.stop().await;
-    Ok(OperationResult::success(None))
+    Ok(OperationResult::success())
 }
 
 #[tauri::command]
@@ -468,4 +586,22 @@ pub fn installation_set_tutorial_completed(
     completed: bool,
 ) -> Result<(), String> {
     migration::set_tutorial_completed(&app, completed).map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::decode_export_payload_with_limit;
+    use base64::engine::general_purpose::STANDARD;
+    use base64::Engine;
+
+    #[test]
+    fn rejects_binary_exports_above_the_decoded_and_encoded_limits() {
+        assert!(decode_export_payload_with_limit(&"A".repeat(9), 3).is_err());
+        let oversized = STANDARD.encode(vec![0_u8; 4]);
+        assert!(decode_export_payload_with_limit(&oversized, 3).is_err());
+        assert_eq!(
+            decode_export_payload_with_limit(&STANDARD.encode(b"ok"), 3).expect("valid payload"),
+            b"ok"
+        );
+    }
 }

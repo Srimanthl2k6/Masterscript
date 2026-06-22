@@ -106,4 +106,21 @@ describe('desktop bootstrap migration', () => {
     expect(storage.getItem(themeKey)).toBe('light')
     expect(storage.getItem(tauriMigrationAppliedKey)).toBe('1')
   })
+
+  it('filters malformed migration collections before writing webview storage', () => {
+    const storage = new MemoryStorage()
+    const manifest = createManifest()
+    manifest.recentProjects.push({
+      label: '',
+      source: 'project',
+      updatedAt: '',
+    })
+    manifest.hostedLanRooms.push('', 'room-a')
+
+    expect(applyMigrationManifestToStorage(storage, manifest)).toBe(true)
+    expect(JSON.parse(storage.getItem(recentProjectsKey) ?? '[]')).toHaveLength(1)
+    expect(JSON.parse(storage.getItem(hostedLanRoomsKey) ?? '[]')).toEqual([
+      'room-a',
+    ])
+  })
 })

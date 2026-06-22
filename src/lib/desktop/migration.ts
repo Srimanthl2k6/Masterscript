@@ -37,7 +37,8 @@ const isRecentProjectEntry = (value: unknown): value is RecentProjectEntry => {
     typeof entry.label === 'string' &&
     (entry.source === 'project' || entry.source === 'import') &&
     typeof entry.updatedAt === 'string' &&
-    (entry.projectId === undefined || typeof entry.projectId === 'string')
+    (entry.projectId === undefined || typeof entry.projectId === 'string') &&
+    (entry.fileGrantId === undefined || typeof entry.fileGrantId === 'string')
   )
 }
 

@@ -1,4 +1,4 @@
-import type { InstallState } from './desktop/types'
+import type { DesktopRuntime, InstallState } from './desktop/types'
 
 export interface TutorialStep {
   id:
@@ -76,5 +76,25 @@ export const tutorialSteps: TutorialStep[] = [
 
 export const shouldOpenTutorialAutomatically = (
   installState: InstallState,
+  runtime: DesktopRuntime,
 ): boolean =>
-  installState.kind !== 'legacy-migrated' && !installState.tutorialCompleted
+  runtime !== 'web' &&
+  installState.kind !== 'legacy-migrated' &&
+  !installState.tutorialCompleted
+
+interface TutorialKeyEvent {
+  key: string
+  altKey: boolean
+  ctrlKey: boolean
+  metaKey: boolean
+  shiftKey: boolean
+  isComposing: boolean
+}
+
+export const isTutorialAdvanceKey = (event: TutorialKeyEvent): boolean =>
+  event.key === 'Enter' &&
+  !event.altKey &&
+  !event.ctrlKey &&
+  !event.metaKey &&
+  !event.shiftKey &&
+  !event.isComposing

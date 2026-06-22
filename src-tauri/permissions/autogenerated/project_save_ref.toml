@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-project-save-ref"
+description = "Enables the project_save_ref command without any pre-configured scope."
+commands.allow = ["project_save_ref"]
+
+[[permission]]
+identifier = "deny-project-save-ref"
+description = "Denies the project_save_ref command without any pre-configured scope."
+commands.deny = ["project_save_ref"]

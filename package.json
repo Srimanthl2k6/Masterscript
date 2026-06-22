@@ -1,7 +1,7 @@
 {
   "name": "masterscript",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "MasterScript desktop screenwriting suite",
   "author": "Srimanthl2k6",
   "license": "UNLICENSED",
@@ -25,11 +25,16 @@
     "tauri:build": "tauri build",
     "tauri:check": "cargo check --manifest-path src-tauri/Cargo.toml",
     "parity:generate": "node analysis/parity/generate-parity-artifacts.mjs",
+    "security:audit": "node scripts/security/audit-gate.mjs",
+    "security:exceptions": "node scripts/security/validate-advisory-exceptions.mjs",
+    "security:settings": "node scripts/security/verify-repository-settings.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource/courier-prime": "^5.2.6",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",

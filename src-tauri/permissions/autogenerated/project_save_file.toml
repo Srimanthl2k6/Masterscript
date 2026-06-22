@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-project-save-file"
+description = "Enables the project_save_file command without any pre-configured scope."
+commands.allow = ["project_save_file"]
+
+[[permission]]
+identifier = "deny-project-save-file"
+description = "Denies the project_save_file command without any pre-configured scope."
+commands.deny = ["project_save_file"]

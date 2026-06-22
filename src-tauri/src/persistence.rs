@@ -37,10 +37,6 @@ pub fn read_json<T: DeserializeOwned>(file_path: &Path) -> io::Result<T> {
     serde_json::from_slice(&raw).map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
 }
 
-pub fn read_json_value(file_path: &Path) -> io::Result<serde_json::Value> {
-    read_json(file_path)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{read_json, write_compact_json_atomic, write_json_atomic};

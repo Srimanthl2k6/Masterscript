@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-collaboration-lan-transport-open"
+description = "Enables the collaboration_lan_transport_open command without any pre-configured scope."
+commands.allow = ["collaboration_lan_transport_open"]
+
+[[permission]]
+identifier = "deny-collaboration-lan-transport-open"
+description = "Denies the collaboration_lan_transport_open command without any pre-configured scope."
+commands.deny = ["collaboration_lan_transport_open"]
