@@ -158,4 +158,12 @@ describe('Pass 2 webview and IPC security boundary', () => {
     expect(rustLan).toContain('validate_room_id')
     expect(rustLan).toContain('try_acquire_owned')
   })
+
+  it('acknowledges LAN authentication only after the peer is relay-ready', () => {
+    const peerRegistration = rustLan.indexOf('state.peers.insert(')
+    const authenticationReady = rustLan.indexOf('&AuthOk {', peerRegistration)
+
+    expect(peerRegistration).toBeGreaterThan(-1)
+    expect(authenticationReady).toBeGreaterThan(peerRegistration)
+  })
 })

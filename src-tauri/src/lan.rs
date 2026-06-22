@@ -438,14 +438,7 @@ async fn authenticate_server_peer(
         return Err("LAN authentication failed".into());
     }
 
-    send_json(
-        websocket,
-        &AuthOk {
-            kind: "auth-ok",
-            version: 2,
-        },
-    )
-    .await
+    Ok(())
 }
 
 #[allow(clippy::result_large_err)]
@@ -518,6 +511,20 @@ async fn handle_peer(
         );
         (peer_id, cached, peers)
     };
+    if send_json(
+        &mut websocket,
+        &AuthOk {
+            kind: "auth-ok",
+            version: 2,
+        },
+    )
+    .await
+    .is_err()
+    {
+        let mut state = room.lock().await;
+        remove_peer(&mut state, peer_id);
+        return;
+    }
     drop(permit);
 
     if let Some(message) = cached_state {
