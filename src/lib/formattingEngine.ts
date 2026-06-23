@@ -9,6 +9,10 @@ import {
   collectCharacterSuggestions,
   detectCatalogEntries,
 } from './screenplay'
+import {
+  parseSceneHeadingParts,
+  sceneHeadingTimesOfDay,
+} from './sceneHeading'
 
 export const standardScriptExtensions: ScriptExtension[] = [
   'V.O.',
@@ -18,17 +22,7 @@ export const standardScriptExtensions: ScriptExtension[] = [
   'FILTERED',
 ]
 
-export const standardTimesOfDay = [
-  'DAY',
-  'NIGHT',
-  'MORNING',
-  'AFTERNOON',
-  'EVENING',
-  'DAWN',
-  'DUSK',
-  'LATER',
-  'CONTINUOUS',
-]
+export const standardTimesOfDay = sceneHeadingTimesOfDay
 
 export const standardTransitions = [
   'CUT TO:',
@@ -65,18 +59,13 @@ const normalizeCue = (value: string): string =>
     .replace(/\s+/g, ' ')
     .toUpperCase()
 
-const normalizeLocation = (value: string): string =>
-  value
-    .trim()
-    .replace(/^(INT\.|EXT\.|INT\/EXT\.|EST\.)\s*/i, '')
-    .split('-')[0]
-    .trim()
-    .toUpperCase()
+const normalizeLocation = (value: string): string => {
+  const parts = parseSceneHeadingParts(value)
+  return parts.location.trim().toUpperCase()
+}
 
 const extractTimeOfDay = (value: string): string | null => {
-  const parts = value.split('-')
-  const time = parts.at(-1)?.trim().toUpperCase() ?? ''
-  return time ? time : null
+  return parseSceneHeadingParts(value).timeOfDay || null
 }
 
 const uniqueSorted = (values: string[]): string[] =>
@@ -158,7 +147,14 @@ export const inferContinuousBlockType = (
 }
 
 export const buildSmartTypeOptions = (project: ScriptProject): SmartTypeOptions => {
-  const locations: string[] = []
+  const locations: string[] = [
+    ...project.catalog
+      .filter((entry) => entry.kind === 'location')
+      .map((entry) => entry.name),
+    ...project.production.breakdown
+      .filter((entry) => entry.kind === 'location')
+      .map((entry) => entry.name),
+  ]
   const timesOfDay: string[] = []
   const shots: string[] = [...standardShots]
 

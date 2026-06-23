@@ -49,6 +49,20 @@ export type RevisionColor =
   | 'cherry'
   | 'tan'
 
+export interface TextFormat {
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  letterSpacing?: boolean
+  fontFamily?: string
+}
+
+export interface TextFormatRange {
+  start: number
+  end: number
+  format: TextFormat
+}
+
 export interface ScriptBlock {
   id: string
   type: BlockType
@@ -62,6 +76,7 @@ export interface ScriptBlock {
   omitted?: boolean
   omittedText?: string | null
   lockedPageLabel?: string | null
+  formatRanges?: TextFormatRange[]
 }
 
 export interface StoryCard {

@@ -1,4 +1,5 @@
 use crate::file_grants::FileGrantRegistry;
+use crate::font_catalog;
 use crate::import_security::{
     read_file_bounded, read_json_value_bounded, read_project_file, validate_docx_archive,
     validate_project_value, validate_serialized_size, DOCX_COMPRESSED_LIMIT, EXPORT_BINARY_LIMIT,
@@ -8,9 +9,9 @@ use crate::lan::{self, LanRelayState, LanTransportState};
 use crate::legacy::InstallState;
 use crate::migration::{self, BootstrapInstallationResult};
 use crate::models::{
-    AutosaveReadResult, BinaryImportResult, LanHostOptions, LanHostResult, LanJoinOptions,
-    LanJoinResult, LanTransportEvent, LanTransportOpenOptions, LanTransportOpenResult,
-    OpenProjectResult, OperationResult, ProjectFileRef, TextImportResult,
+    AutosaveReadResult, BinaryImportResult, FontFamilyDescriptor, FontLoadResult, LanHostOptions,
+    LanHostResult, LanJoinOptions, LanJoinResult, LanTransportEvent, LanTransportOpenOptions,
+    LanTransportOpenResult, OpenProjectResult, OperationResult, ProjectFileRef, TextImportResult,
 };
 use crate::persistence::{write_bytes_atomic, write_compact_json_atomic, write_json_atomic};
 use base64::engine::general_purpose::STANDARD;
@@ -23,6 +24,16 @@ use tauri::{Manager, State};
 const AUTOSAVE_FILE: &str = "autosave.msproj.json";
 const RECENT_PROJECT_SNAPSHOTS_FILE: &str = "recent-project-snapshots-v1.json";
 const RECENT_PROJECT_SNAPSHOT_LIMIT: usize = 12;
+
+#[tauri::command]
+pub fn font_list_installed() -> Vec<FontFamilyDescriptor> {
+    font_catalog::list_installed_fonts()
+}
+
+#[tauri::command]
+pub fn font_load_for_export(family: String, style: String) -> FontLoadResult {
+    font_catalog::load_font_for_export(&family, &style)
+}
 
 fn normalize_file_name(value: &str) -> String {
     let normalized = value

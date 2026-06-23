@@ -1,5 +1,6 @@
 mod commands;
 mod file_grants;
+mod font_catalog;
 mod import_security;
 mod lan;
 mod legacy;
@@ -10,12 +11,12 @@ mod persistence;
 use commands::{
     bootstrap_installation, collaboration_lan_host, collaboration_lan_join,
     collaboration_lan_status, collaboration_lan_stop, collaboration_lan_transport_close,
-    collaboration_lan_transport_open, collaboration_lan_transport_send, installation_get_state,
-    installation_set_tutorial_completed, project_autosave, project_export_docx, project_export_fdx,
-    project_export_fountain, project_export_pdf, project_import_docx, project_import_fdx,
-    project_import_fountain, project_open_file, project_open_ref, project_read_autosave,
-    project_read_recent_snapshots, project_save_file, project_save_ref,
-    project_write_recent_snapshot,
+    collaboration_lan_transport_open, collaboration_lan_transport_send, font_list_installed,
+    font_load_for_export, installation_get_state, installation_set_tutorial_completed,
+    project_autosave, project_export_docx, project_export_fdx, project_export_fountain,
+    project_export_pdf, project_import_docx, project_import_fdx, project_import_fountain,
+    project_open_file, project_open_ref, project_read_autosave, project_read_recent_snapshots,
+    project_save_file, project_save_ref, project_write_recent_snapshot,
 };
 use lan::{LanRelayState, LanTransportState};
 
@@ -52,6 +53,8 @@ pub fn run() {
             bootstrap_installation,
             installation_get_state,
             installation_set_tutorial_completed,
+            font_list_installed,
+            font_load_for_export,
         ])
         .run(tauri::generate_context!())
         .expect("error while running MasterScript");

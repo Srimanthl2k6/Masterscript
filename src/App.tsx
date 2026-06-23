@@ -11,6 +11,13 @@ import {
 } from 'react'
 import type { ChangeEvent, KeyboardEvent } from 'react'
 import CommandPalette, { type CommandResult } from './components/CommandPalette'
+import RichScriptBlockEditor, { type RichScriptBlockEditorHandle,
+  type TextSelection } from './components/RichScriptBlockEditor'
+import FormattedPrintLineText from './components/FormattedPrintLineText'
+import WriterFormattingControls from './components/WriterFormattingControls'
+import ShortcutRemapPanel from './components/ShortcutRemapPanel'
+import AutofillSuggestions from './components/AutofillSuggestions'
+import WriterBlockActions from './components/WriterBlockActions'
 import { useCollaborationSession, type CollaborationStatus } from './lib/collaboration/useCollaborationSession'
 import {
   workspaceFileMenuGroups,
@@ -57,6 +64,13 @@ import {
   markLastTwoDialogueGroupsAsDual,
   rebuildCatalogFromScript,
 } from './lib/formattingEngine'
+import { replaceSceneHeadingLocation } from './lib/smartAutofill'
+import { useSmartAutofill, type AutofillSuggestion } from './lib/useSmartAutofill'
+import { formatAtOffset, updateRangesForEdits, updateRangesForTextEdit } from './lib/richText'
+import { useTextFormatting } from './lib/useTextFormatting'
+import { useInstalledFonts } from './lib/useInstalledFonts'
+import { defaultScreenplayShortcuts, formattingActions, shortcutBlockTypes,
+  shortcutFromKeyEvent, shortcutSignature } from './lib/editorShortcuts'
 import { buildCardsFromTemplate, storyTemplates } from './lib/planningTemplates'
 import {
   buildCharacterDialogueReport,
@@ -73,7 +87,6 @@ import {
   getScriptStats,
   insertCharacterVoiceCue,
   nextTypeForEnter,
-  screenplayKeyboardCycle,
   summarizeRevisionSnapshotDiff,
   toFountain,
   type CharacterVoiceCue,
@@ -182,6 +195,7 @@ import {
   type ScriptBlock,
   type ScriptFormatId,
   type ScriptProject,
+  type TextFormat,
 } from './types/screenplay'
 
 type AppView = 'home' | 'workspace'
@@ -255,10 +269,6 @@ interface QueuedSelection {
 
 const defaultPreviewZoom = 0.82
 const useContinuousDraftEditor = false
-const characterVoiceCueOptions: Array<{ label: string; cue: CharacterVoiceCue }> = [
-  { label: 'Voice Over', cue: 'V.O.' },
-  { label: 'Off Screen', cue: 'O.S.' },
-]
 
 const blockTypePlaceholders: Record<BlockType, string> = {
   'scene-heading': 'INT. LOCATION - DAY',
@@ -349,66 +359,6 @@ const continuousDraftPlaceholder = [
   alignContinuousText(blockTypePlaceholders.dialogue, 'dialogue'),
 ].join('\n\n')
 
-const shortcutBlockTypes: BlockType[] = [
-  'scene-heading',
-  'action',
-  'character',
-  'dialogue',
-  'parenthetical',
-  'transition',
-  'shot',
-]
-
-const defaultScreenplayShortcuts: Record<string, string> = {
-  'scene-heading': 'Ctrl+Alt+1',
-  action: 'Ctrl+Alt+2',
-  character: 'Ctrl+Alt+3',
-  dialogue: 'Ctrl+Alt+4',
-  parenthetical: 'Ctrl+Alt+5',
-  transition: 'Ctrl+Alt+6',
-  shot: 'Ctrl+Alt+7',
-}
-
-const shortcutSignature = (shortcut: string): string =>
-  shortcut
-    .split('+')
-    .map((part) => part.trim().toLowerCase())
-    .filter(Boolean)
-    .join('+')
-
-const shortcutFromKeyEvent = (
-  event: Pick<
-    KeyboardEvent<HTMLElement>,
-    'altKey' | 'ctrlKey' | 'key' | 'metaKey' | 'shiftKey'
-  >,
-): string | null => {
-  if (['Alt', 'Control', 'Meta', 'Shift'].includes(event.key)) {
-    return null
-  }
-
-  const key =
-    event.key.length === 1
-      ? event.key.toUpperCase()
-      : event.key === ' '
-        ? 'Space'
-        : event.key
-
-  const hasModifier = event.ctrlKey || event.altKey || event.metaKey || event.shiftKey
-  const isFunctionKey = /^F\d{1,2}$/i.test(key)
-  if (!hasModifier && !isFunctionKey) {
-    return null
-  }
-
-  return [
-    event.ctrlKey ? 'Ctrl' : '',
-    event.altKey ? 'Alt' : '',
-    event.shiftKey ? 'Shift' : '',
-    event.metaKey ? 'Meta' : '',
-    key,
-  ]
-    .filter(Boolean)
-    .join('+')
-}
 
 const readHostedLanRoomIds = (): Set<string> => {
   try {
@@ -816,6 +766,14 @@ const parseContinuousDraftText = (
         ...existing,
         type: inferredType,
         text: segment,
+        formatRanges:
+          existing.text === segment
+            ? existing.formatRanges
+            : updateRangesForTextEdit(
+                existing.text,
+                segment,
+                existing.formatRanges,
+              ),
       }
     }
 
@@ -924,6 +882,14 @@ function App({ initialInstallState = null }: AppProps) {
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
+  const [activeTextSelection, setActiveTextSelection] = useState<TextSelection>({
+    start: 0,
+    end: 0,
+  })
+  const [futureTypingFormats, setFutureTypingFormats] = useState<
+    Record<string, TextFormat>
+  >({})
+  const fontFamilies = useInstalledFonts()
   const [continuousEnterType, setContinuousEnterType] = useState<BlockType>('character')
   const [previewZoom, setPreviewZoom] = useState(defaultPreviewZoom)
   const [previewPageIndex, setPreviewPageIndex] = useState(0)
@@ -942,6 +908,10 @@ function App({ initialInstallState = null }: AppProps) {
   const [isBootstrappingCollaboration, setIsBootstrappingCollaboration] = useState(false)
 
   const project = history.present
+  const hasRichFormatting = useMemo(
+    () => project.blocks.some((block) => (block.formatRanges?.length ?? 0) > 0),
+    [project.blocks],
+  )
   const scenes = useMemo(() => extractScenes(project), [project])
   const storyState = project.story
   const storyOutline = useMemo(
@@ -1117,34 +1087,20 @@ function App({ initialInstallState = null }: AppProps) {
     [project.advanced.editor.shortcuts],
   )
 
-  const activeCharacterSuggestions = useMemo(() => {
-    if (!selectedBlock || selectedBlock.type !== 'character') {
-      return [] as string[]
-    }
+  const formattingShortcuts = useMemo(
+    () =>
+      formattingActions.map((action) => ({
+        ...action,
+        shortcut:
+          project.advanced.editor.shortcuts[action.id] ??
+          defaultScreenplayShortcuts[action.id],
+      })),
+    [project.advanced.editor.shortcuts],
+  )
 
-    const query = selectedBlock.text.trim().toUpperCase()
-    return characterSuggestions
-      .filter((name) => name !== query)
-      .filter((name) => (query ? name.includes(query) : true))
-      .slice(0, 8)
-  }, [characterSuggestions, selectedBlock])
-
-  const activeCharacterVoiceCueSuggestions = useMemo(() => {
-    if (!selectedBlock || selectedBlock.type !== 'character') {
-      return [] as typeof characterVoiceCueOptions
-    }
-
-    const openParenIndex = selectedBlock.text.lastIndexOf('(')
-    if (
-      openParenIndex < 0 ||
-      selectedBlock.text.slice(openParenIndex).includes(')') ||
-      !selectedBlock.text.slice(0, openParenIndex).trim()
-    ) {
-      return [] as typeof characterVoiceCueOptions
-    }
-
-    return characterVoiceCueOptions
-  }, [selectedBlock])
+  const { suggestions: activeAutofillSuggestions, activeSuggestionIndex,
+    setActiveSuggestionIndex, setDismissedSuggestionText } =
+    useSmartAutofill(selectedBlock, characterSuggestions, smartTypeOptions)
 
   const snapshotOptions = useMemo<SnapshotOption[]>(
     () =>
@@ -1481,7 +1437,7 @@ function App({ initialInstallState = null }: AppProps) {
     [searchHits],
   )
 
-  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({})
+  const textareaRefs = useRef<Record<string, RichScriptBlockEditorHandle | null>>({})
   const continuousDraftRef = useRef<HTMLTextAreaElement | null>(null)
   const itemRefs = useRef<Record<string, HTMLElement | null>>({})
   const pendingFocusId = useRef<string | null>(null)
@@ -1736,8 +1692,9 @@ function App({ initialInstallState = null }: AppProps) {
       pendingBlockSelection.current?.id === focusId
         ? pendingBlockSelection.current
         : null
-    const start = selection ? Math.min(selection.start, node.value.length) : node.value.length
-    const end = selection ? Math.min(selection.end, node.value.length) : start
+    const value = node.getValue()
+    const start = selection ? Math.min(selection.start, value.length) : value.length
+    const end = selection ? Math.min(selection.end, value.length) : start
 
     node.focus()
     if (pendingFocusShouldScroll.current) {
@@ -2229,25 +2186,39 @@ function App({ initialInstallState = null }: AppProps) {
     text: string,
     selection?: Omit<QueuedSelection, 'id'>,
   ) => {
+    const previousBlock = project.blocks.find((block) => block.id === blockId)
     const result = updateBlockTextWithRevisionTracking(project, blockId, text)
     if (result.blocked) {
       setStatusMessage('Locked scene or page prevented edit')
       return
     }
+    const nextBlock = result.project.blocks.find((block) => block.id === blockId)
+    if (previousBlock && nextBlock) {
+      nextBlock.formatRanges = updateRangesForTextEdit(
+        previousBlock.text,
+        text,
+        previousBlock.formatRanges,
+        futureTypingFormats[blockId],
+      )
+    }
 
     setSelectedBlockId(blockId)
+    if (selection) {
+      setActiveTextSelection(selection)
+    }
     queueFocus(blockId, selection, { highlight: false, scroll: false })
     commitReplacement(result.project, 'Project updated', {
       coalesceKey: `block:${blockId}`,
     })
   }
 
-  const getTextareaSelection = (
-    textarea: HTMLTextAreaElement,
-  ): Omit<QueuedSelection, 'id'> => ({
-    start: textarea.selectionStart ?? textarea.value.length,
-    end: textarea.selectionEnd ?? textarea.value.length,
-  })
+  const getBlockSelection = (
+    blockId: string,
+  ): Omit<QueuedSelection, 'id'> =>
+    textareaRefs.current[blockId]?.getSelection() ?? {
+      start: project.blocks.find((block) => block.id === blockId)?.text.length ?? 0,
+      end: project.blocks.find((block) => block.id === blockId)?.text.length ?? 0,
+    }
 
   const onBlockTypeChange = (
     blockId: string,
@@ -2292,15 +2263,68 @@ function App({ initialInstallState = null }: AppProps) {
     }, 'Removed block')
   }
 
-  const setEditorShortcut = (type: BlockType, shortcut: string) => {
+  const { activeFormat: activeTextFormat, applyTextFormatting,
+    applyFontFamily, clearTextFormatting } = useTextFormatting({
+    activeBlock: activeEditorBlock,
+    activeSelection: activeTextSelection,
+    commit,
+    fontFamilies,
+    futureFormats: futureTypingFormats,
+    getSelection: getBlockSelection,
+    isDesktop: desktopBridge.runtime !== 'web',
+    queueFocus: (blockId, selection) => queueFocus(
+      blockId, selection, { highlight: false, scroll: false },
+    ),
+    setFutureFormats: setFutureTypingFormats,
+    setStatus: setStatusMessage,
+  })
+
+  const applyAutofillSuggestion = (
+    blockId: string,
+    suggestion: AutofillSuggestion,
+  ) => {
+    const target = project.blocks.find((block) => block.id === blockId)
+    if (!target) {
+      return
+    }
+    if (suggestion.kind === 'voice-cue') {
+      applyCharacterVoiceCue(blockId, suggestion.value as CharacterVoiceCue)
+      return
+    }
+    const nextText =
+      suggestion.kind === 'location'
+        ? replaceSceneHeadingLocation(target.text, suggestion.value)
+        : suggestion.value
+    onBlockTextChange(blockId, nextText, {
+      start: nextText.length,
+      end: nextText.length,
+    })
+    setDismissedSuggestionText(nextText)
+  }
+
+  const setEditorShortcut = (action: string, label: string, shortcut: string) => {
+    const effectiveShortcuts = {
+      ...defaultScreenplayShortcuts,
+      ...project.advanced.editor.shortcuts,
+    }
+    const collision = Object.entries(effectiveShortcuts).find(
+      ([key, assigned]) =>
+        key !== action &&
+        shortcutSignature(assigned) === shortcutSignature(shortcut),
+    )
+    if (collision) {
+      setStatusMessage(`Shortcut already assigned to ${collision[0]}`)
+      return
+    }
     commit((draft) => {
-      draft.advanced.editor.shortcuts[type] = shortcut
-    }, `Updated ${blockTypeLabels[type]} shortcut`)
+      draft.advanced.editor.shortcuts[action] = shortcut
+    }, `Updated ${label} shortcut`)
   }
 
   const captureEditorShortcut = (
     event: KeyboardEvent<HTMLInputElement>,
-    type: BlockType,
+    action: string,
+    label: string,
   ) => {
     event.preventDefault()
     event.stopPropagation()
@@ -2316,7 +2340,7 @@ function App({ initialInstallState = null }: AppProps) {
       return
     }
 
-    setEditorShortcut(type, shortcut)
+    setEditorShortcut(action, label, shortcut)
   }
 
   const resetEditorShortcuts = () => {
@@ -2337,12 +2361,24 @@ function App({ initialInstallState = null }: AppProps) {
   }
 
   const onBlockKeyDown = (
-    event: KeyboardEvent<HTMLTextAreaElement>,
+    event: KeyboardEvent<HTMLDivElement>,
     index: number,
     blockId: string,
     blockType: BlockType,
   ) => {
     const eventShortcut = shortcutFromKeyEvent(event)
+    const formattingShortcut = formattingShortcuts.find(
+      (item) =>
+        eventShortcut !== null &&
+        (shortcutSignature(item.shortcut) === shortcutSignature(eventShortcut) ||
+          shortcutSignature(item.shortcut) ===
+            shortcutSignature(eventShortcut.replace(/^Meta\+/, 'Ctrl+'))),
+    )
+    if (formattingShortcut) {
+      event.preventDefault()
+      applyTextFormatting(formattingShortcut.property)
+      return
+    }
     const shortcut = screenplayElementShortcuts.find(
       (item) =>
         eventShortcut !== null &&
@@ -2353,7 +2389,7 @@ function App({ initialInstallState = null }: AppProps) {
       onBlockTypeChange(
         blockId,
         shortcut.type,
-        getTextareaSelection(event.currentTarget),
+        getBlockSelection(blockId),
       )
       return
     }
@@ -2367,14 +2403,14 @@ function App({ initialInstallState = null }: AppProps) {
       onBlockTypeChange(
         blockId,
         nextType,
-        getTextareaSelection(event.currentTarget),
+        getBlockSelection(blockId),
       )
       return
     }
 
     if (
       event.key === 'Backspace' &&
-      event.currentTarget.value.length === 0 &&
+      (event.currentTarget.innerText === '' || event.currentTarget.innerText === '\n') &&
       project.blocks.length > 1
     ) {
       event.preventDefault()
@@ -2389,6 +2425,36 @@ function App({ initialInstallState = null }: AppProps) {
       }
       removeBlock(blockId)
       return
+    }
+
+    if (activeAutofillSuggestions.length > 0) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        setActiveSuggestionIndex((current) => {
+          const direction = event.key === 'ArrowDown' ? 1 : -1
+          return (
+            current + direction + activeAutofillSuggestions.length
+          ) % activeAutofillSuggestions.length
+        })
+        return
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setDismissedSuggestionText(
+          project.blocks.find((block) => block.id === blockId)?.text ?? '',
+        )
+        return
+      }
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault()
+        applyAutofillSuggestion(
+          blockId,
+          activeAutofillSuggestions[
+            Math.min(activeSuggestionIndex, activeAutofillSuggestions.length - 1)
+          ],
+        )
+        return
+      }
     }
 
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -3032,7 +3098,11 @@ function App({ initialInstallState = null }: AppProps) {
         fountain,
       )
       if (result.ok) {
-        setStatusMessage('Fountain export created')
+        setStatusMessage(
+          hasRichFormatting
+            ? 'Fountain export created; rich formatting was omitted'
+            : 'Fountain export created',
+        )
       }
       return
     }
@@ -3042,7 +3112,11 @@ function App({ initialInstallState = null }: AppProps) {
       `${project.meta.title || 'untitled'}.fountain`,
       'text/plain;charset=utf-8',
     )
-    setStatusMessage('Fountain export downloaded')
+    setStatusMessage(
+      hasRichFormatting
+        ? 'Fountain downloaded; rich formatting was omitted'
+        : 'Fountain export downloaded',
+    )
   }
 
   const applyImportedProject = (
@@ -3246,19 +3320,32 @@ function App({ initialInstallState = null }: AppProps) {
   const exportPdf = async () => {
     try {
       const { exportProjectToPdf } = await import('./lib/adapters/pdf')
-      const output = await exportProjectToPdf(project)
+      const warnings: string[] = []
+      const output = await exportProjectToPdf(project, {
+        loadFont: (family, style) =>
+          desktopBridge.loadFontForExport(family, style),
+        onWarning: (warning) => warnings.push(warning),
+      })
 
       if (desktopBridge.runtime !== 'web') {
         const base64 = arrayBufferToBase64(output)
         const result = await desktopBridge.exportPdf(project.meta.title, base64)
         if (result.ok) {
-          setStatusMessage('PDF export created')
+          setStatusMessage(
+            warnings.length > 0
+              ? `PDF export created with ${warnings.length} font fallback warning(s)`
+              : 'PDF export created',
+          )
         }
         return
       }
 
       triggerBinaryDownload(output, `${project.meta.title || 'untitled'}.pdf`, 'application/pdf')
-      setStatusMessage('PDF export downloaded')
+      setStatusMessage(
+        warnings.length > 0
+          ? `PDF downloaded with ${warnings.length} font fallback warning(s)`
+          : 'PDF export downloaded',
+      )
     } catch (error) {
       setStatusMessage(
         error instanceof Error ? error.message : 'PDF export failed unexpectedly',
@@ -3339,6 +3426,12 @@ function App({ initialInstallState = null }: AppProps) {
 
       if (result.replaced) {
         didReplace = true
+        target.formatRanges = updateRangesForTextEdit(
+          target.text,
+          result.text,
+          target.formatRanges,
+          formatAtOffset(target.formatRanges, activeMatch.index),
+        )
         target.text = result.text
       }
     }, 'Replaced current find match')
@@ -3362,6 +3455,12 @@ function App({ initialInstallState = null }: AppProps) {
     let replacedCount = 0
     commit((draft) => {
       for (const block of draft.blocks) {
+        const matcher = buildFindRegex(trimmedQuery, findCaseSensitive, true)
+        const edits = [...block.text.matchAll(matcher)].map((match) => ({
+          start: match.index,
+          end: match.index + match[0].length,
+          insertedText: replaceQuery,
+        }))
         const replacement = replaceAllOccurrences(
           block.text,
           trimmedQuery,
@@ -3370,7 +3469,13 @@ function App({ initialInstallState = null }: AppProps) {
         )
 
         if (replacement.replacedCount > 0) {
-          block.text = replacement.text
+          const updated = updateRangesForEdits(
+            block.text,
+            block.formatRanges,
+            edits,
+          )
+          block.text = updated.text
+          block.formatRanges = updated.ranges
           replacedCount += replacement.replacedCount
         }
       }
@@ -4103,7 +4208,13 @@ function App({ initialInstallState = null }: AppProps) {
 
   const exportCleanPdf = async () => {
     const { exportProjectToPdf } = await import('./lib/adapters/pdf')
-    const output = await exportProjectToPdf(createPdfExportProject(project, 'clean'))
+    const output = await exportProjectToPdf(
+      createPdfExportProject(project, 'clean'),
+      {
+        loadFont: (family, style) =>
+          desktopBridge.loadFontForExport(family, style),
+      },
+    )
     triggerBinaryDownload(
       output,
       `${project.meta.title || 'untitled'}-clean.pdf`,
@@ -4114,7 +4225,13 @@ function App({ initialInstallState = null }: AppProps) {
 
   const exportDirtyPdf = async () => {
     const { exportProjectToPdf } = await import('./lib/adapters/pdf')
-    const output = await exportProjectToPdf(createPdfExportProject(project, 'dirty'))
+    const output = await exportProjectToPdf(
+      createPdfExportProject(project, 'dirty'),
+      {
+        loadFont: (family, style) =>
+          desktopBridge.loadFontForExport(family, style),
+      },
+    )
     triggerBinaryDownload(
       output,
       `${project.meta.title || 'untitled'}-dirty.pdf`,
@@ -4206,7 +4323,11 @@ function App({ initialInstallState = null }: AppProps) {
         'application/vnd.ms-excel',
       )
     }
-    setStatusMessage('Additional export downloaded')
+    setStatusMessage(
+      kind === 'txt' && hasRichFormatting
+        ? 'TXT downloaded; rich formatting was omitted'
+        : 'Additional export downloaded',
+    )
   }
 
   const setCastStatusForCharacter = () => {
@@ -4594,16 +4715,6 @@ function App({ initialInstallState = null }: AppProps) {
     )
   }
 
-  const applyCharacterSuggestion = (blockId: string, name: string) => {
-    commit((draft) => {
-      const target = draft.blocks.find((block) => block.id === blockId)
-      if (target && target.type === 'character') {
-        target.text = name
-      }
-    }, `Applied character suggestion: ${name}`)
-    queueFocus(blockId)
-  }
-
   const applyCharacterVoiceCue = (blockId: string, cue: CharacterVoiceCue) => {
     const targetBlock = project.blocks.find((block) => block.id === blockId)
     if (!targetBlock || targetBlock.type !== 'character') {
@@ -4629,9 +4740,13 @@ function App({ initialInstallState = null }: AppProps) {
       return
     }
 
-    const source = textarea?.value ?? targetBlock.text
-    const start = textarea?.selectionStart ?? source.length
-    const end = textarea?.selectionEnd ?? start
+    const source = textarea?.getValue() ?? targetBlock.text
+    const selection = textarea?.getSelection() ?? {
+      start: source.length,
+      end: source.length,
+    }
+    const start = selection.start
+    const end = selection.end
     const nextText = `${source.slice(0, start)}${text}${source.slice(end)}`
     const nextCursor = start + text.length
 
@@ -5481,72 +5596,46 @@ function App({ initialInstallState = null }: AppProps) {
                           onDragOver={(event) => event.preventDefault()}
                           onDrop={() => onBlockDrop(block.id)}
                         >
-                          <textarea
+                          <RichScriptBlockEditor
                             ref={(node) => {
                               textareaRefs.current[block.id] = node
                             }}
+                            block={block}
                             className={`script-input ${block.type}${
                               activeBlockId === block.id ? ' selected' : ''
                             }`}
-                            value={block.text}
                             onFocus={() => {
                               setSelectedBlockId(block.id)
                               if (block.type === 'scene-heading') {
                                 setSelectedSceneId(block.id)
                               }
                             }}
-                            onChange={(event) =>
+                            onSelectionChange={(selection) => {
+                              if (activeBlockId === block.id) {
+                                setActiveTextSelection(selection)
+                              }
+                            }}
+                            onChange={(text, selection) =>
                               onBlockTextChange(
                                 block.id,
-                                event.target.value,
-                                getTextareaSelection(event.currentTarget),
+                                text,
+                                selection,
                               )
                             }
                             onKeyDown={(event) =>
                               onBlockKeyDown(event, index, block.id, block.type)
                             }
-                            rows={Math.max(1, block.text.split('\n').length)}
                             placeholder={blockTypePlaceholders[block.type]}
                           />
 
-                          {block.type === 'character' &&
-                            activeBlockId === block.id &&
-                            activeCharacterVoiceCueSuggestions.length > 0 && (
-                              <div className="character-suggestions" role="listbox">
-                                {activeCharacterVoiceCueSuggestions.map((option) => (
-                                  <button
-                                    key={`${block.id}-${option.cue}`}
-                                    className="character-suggestion-btn"
-                                    onMouseDown={(event) => {
-                                      event.preventDefault()
-                                      applyCharacterVoiceCue(block.id, option.cue)
-                                    }}
-                                  >
-                                    {option.label}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-
-                          {block.type === 'character' &&
-                            activeBlockId === block.id &&
-                            activeCharacterVoiceCueSuggestions.length === 0 &&
-                            activeCharacterSuggestions.length > 0 && (
-                              <div className="character-suggestions" role="listbox">
-                                {activeCharacterSuggestions.map((name) => (
-                                  <button
-                                    key={`${block.id}-${name}`}
-                                    className="character-suggestion-btn"
-                                    onMouseDown={(event) => {
-                                      event.preventDefault()
-                                      applyCharacterSuggestion(block.id, name)
-                                    }}
-                                  >
-                                    {name}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
+                          {activeBlockId === block.id && (
+                            <AutofillSuggestions
+                              activeIndex={activeSuggestionIndex}
+                              blockId={block.id}
+                              suggestions={activeAutofillSuggestions}
+                              onSelect={applyAutofillSuggestion}
+                            />
+                          )}
                         </article>
                       )
                     })}
@@ -5758,7 +5847,12 @@ function App({ initialInstallState = null }: AppProps) {
                               fontSize: `${line.fontSize}px`,
                             }}
                           >
-                            {line.text}
+                            <FormattedPrintLineText
+                              line={line}
+                              block={project.blocks.find(
+                                (block) => block.id === line.blockId,
+                              )}
+                            />
                           </p>
                         ))}
                       </div>
@@ -6971,97 +7065,38 @@ function App({ initialInstallState = null }: AppProps) {
                   </strong>
                 </div>
 
-                <div className="keyboard-hint-list">
-                  <div>
-                    <kbd>Enter</kbd>
-                    <span>Next screenplay block</span>
-                  </div>
-                  <div>
-                    <kbd>Shift</kbd>
-                    <kbd>Enter</kbd>
-                    <span>New line in current block</span>
-                  </div>
-                  <div>
-                    <kbd>Tab</kbd>
-                    <span>
-                      Cycle type: {screenplayKeyboardCycle.map((type) => blockTypeLabels[type]).join(' / ')}
-                    </span>
-                  </div>
-                  <div>
-                    <kbd>Shift</kbd>
-                    <kbd>Tab</kbd>
-                    <span>Cycle backward</span>
-                  </div>
-                </div>
+                <WriterFormattingControls
+                  key={`${activeEditorBlock?.id ?? 'none'}-${activeTextFormat.fontFamily ?? ''}`}
+                  activeFormat={activeTextFormat}
+                  fontFamilies={fontFamilies}
+                  formattingShortcuts={formattingShortcuts}
+                  onToggle={applyTextFormatting}
+                  onFontFamily={applyFontFamily}
+                  onClear={clearTextFormatting}
+                />
 
-                <div className="shortcut-grid">
-                  {screenplayElementShortcuts.map((item) => (
-                    <span key={item.type}>
-                      <kbd>{item.shortcut}</kbd>
-                      {blockTypeLabels[item.type]}
-                    </span>
-                  ))}
-                </div>
+                <ShortcutRemapPanel
+                  screenplay={screenplayElementShortcuts}
+                  formatting={formattingShortcuts}
+                  onCapture={captureEditorShortcut}
+                  onReset={resetEditorShortcuts}
+                />
 
-                <details className="shortcut-remap-panel">
-                  <summary>Remap shortcuts</summary>
-                  <div className="shortcut-remap-list">
-                    {screenplayElementShortcuts.map((item) => (
-                      <label key={`remap-${item.type}`}>
-                        <span>{blockTypeLabels[item.type]}</span>
-                        <input
-                          value={item.shortcut}
-                          readOnly
-                          onKeyDown={(event) => captureEditorShortcut(event, item.type)}
-                          onFocus={(event) => event.currentTarget.select()}
-                          aria-label={`Shortcut for ${blockTypeLabels[item.type]}`}
-                        />
-                      </label>
-                    ))}
-                  </div>
-                  <button className="subtle-action" onClick={resetEditorShortcuts}>
-                    Reset defaults
-                  </button>
-                </details>
-
-                <details className="block-actions-panel">
-                  <summary>Block actions</summary>
-                  <div className="inline-actions">
-                    <button
-                      onClick={() => {
-                        if (activeBlockId) {
-                          markRevision(activeBlockId)
-                        }
-                      }}
-                      disabled={!project.meta.revisionMode || !activeBlockId}
-                    >
-                      Mark Revision
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (activeEditorBlock && activeBlockIndex >= 0) {
-                          addBlockAfter(
-                            activeBlockIndex,
-                            nextTypeForEnter(activeEditorBlock.type),
-                          )
-                        }
-                      }}
-                      disabled={!activeEditorBlock || activeBlockIndex < 0}
-                    >
-                      Insert Next
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (activeBlockId) {
-                          removeBlock(activeBlockId)
-                        }
-                      }}
-                      disabled={!activeBlockId || project.blocks.length === 1}
-                    >
-                      Delete Block
-                    </button>
-                  </div>
-                </details>
+                <WriterBlockActions
+                  canMarkRevision={project.meta.revisionMode && Boolean(activeBlockId)}
+                  canInsert={Boolean(activeEditorBlock) && activeBlockIndex >= 0}
+                  canDelete={Boolean(activeBlockId) && project.blocks.length > 1}
+                  onMarkRevision={() => activeBlockId && markRevision(activeBlockId)}
+                  onInsert={() =>
+                    activeEditorBlock &&
+                    activeBlockIndex >= 0 &&
+                    addBlockAfter(
+                      activeBlockIndex,
+                      nextTypeForEnter(activeEditorBlock.type),
+                    )
+                  }
+                  onDelete={() => activeBlockId && removeBlock(activeBlockId)}
+                />
 
                 <details className="smarttype-panel compact-smarttype">
                   <summary>SmartType suggestions</summary>
@@ -7317,7 +7352,10 @@ function App({ initialInstallState = null }: AppProps) {
                     fontSize: `${line.fontSize}px`,
                   }}
                 >
-                  {line.text}
+                  <FormattedPrintLineText
+                    line={line}
+                    block={project.blocks.find((block) => block.id === line.blockId)}
+                  />
                 </p>
               ))}
             </div>

@@ -14,7 +14,11 @@ import {
   normalizeCharacterName,
   toFountain,
 } from './screenplay'
-import { parseSceneHeadingParts } from './sceneHeading'
+import {
+  parseSceneHeadingParts,
+  sceneHeadingTimesOfDay,
+} from './sceneHeading'
+import { formatRuns } from './richText'
 
 export interface ScriptFormatPreset {
   id: ScriptFormatId
@@ -117,17 +121,7 @@ const wordCount = (text: string): number =>
 
 const blockWords = (block: ScriptBlock): number => wordCount(block.text)
 
-export const smartTypeTimesOfDay = [
-  'DAY',
-  'NIGHT',
-  'DAWN',
-  'DUSK',
-  'MAGIC HOUR',
-  'CONTINUOUS',
-  'LATER',
-  'MOMENTS LATER',
-  'SAME TIME',
-]
+export const smartTypeTimesOfDay = sceneHeadingTimesOfDay
 
 export const smartTypeTransitions = [
   'CUT TO:',
@@ -393,19 +387,67 @@ export const importCeltxProject = (content: string): ScriptProject =>
 
 export const exportTxtProject = (project: ScriptProject): string => toFountain(project)
 
-export const exportRtfProject = (project: ScriptProject): string =>
-  `{\\rtf1\\ansi\n${project.blocks
-    .map((block) => `${block.text.replace(/[{}\\]/g, '')}\\par`)
+export const exportRtfProject = (project: ScriptProject): string => {
+  const families = [
+    'Courier Prime',
+    ...new Set(
+      project.blocks.flatMap((block) =>
+        (block.formatRanges ?? [])
+          .map((range) => range.format.fontFamily)
+          .filter((family): family is string => Boolean(family)),
+      ),
+    ),
+  ]
+  const fontTable = families
+    .map((family, index) => `{\\f${index} ${family.replace(/[{}\\;]/g, '')};}`)
+    .join('')
+  return `{\\rtf1\\ansi{\\fonttbl${fontTable}}\n${project.blocks
+    .map((block) =>
+      `${formatRuns(block.text, block.formatRanges)
+        .map((run) => {
+          const text = run.text.replace(/\\/g, '\\\\').replace(/[{}]/g, '\\$&')
+          const fontIndex = run.format.fontFamily
+            ? Math.max(0, families.indexOf(run.format.fontFamily))
+            : 0
+          const prefix = [
+            `\\f${fontIndex}`,
+            run.format.bold ? '\\b' : '',
+            run.format.italic ? '\\i' : '',
+            run.format.underline ? '\\ul' : '',
+            run.format.letterSpacing ? '\\expndtw48' : '',
+          ].join('')
+          return `{${prefix} ${text}}`
+        })
+        .join('')}\\par`,
+    )
     .join('\n')}\n}`
+}
 
 export const exportHtmlProject = (project: ScriptProject): string =>
   `<main>${project.blocks
     .map(
       (block) =>
-        `<article data-type="${block.type}">${block.text
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')}</article>`,
+        `<article data-type="${block.type}">${formatRuns(
+          block.text,
+          block.formatRanges,
+        )
+          .map((run) => {
+            const text = run.text
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+            const style = [
+              run.format.bold ? 'font-weight:700' : '',
+              run.format.italic ? 'font-style:italic' : '',
+              run.format.underline ? 'text-decoration:underline' : '',
+              run.format.letterSpacing ? 'letter-spacing:0.08em' : '',
+              run.format.fontFamily
+                ? `font-family:${run.format.fontFamily.replace(/[;"<>]/g, '')}`
+                : '',
+            ].filter(Boolean).join(';')
+            return style ? `<span style="${style}">${text}</span>` : text
+          })
+          .join('')}</article>`,
     )
     .join('')}</main>`
 

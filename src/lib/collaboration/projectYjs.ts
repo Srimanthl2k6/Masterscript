@@ -34,6 +34,7 @@ const blockScalarKeys = [
   'omitted',
   'omittedText',
   'lockedPageLabel',
+  'formatRanges',
 ] as const satisfies ReadonlyArray<keyof ScriptBlock>
 
 const cloneJson = <T>(value: T): T => {

@@ -35,6 +35,8 @@ describe('createTauriDesktopBridge', () => {
     await bridge.importDocx()
     await bridge.exportDocx('Draft', 'ZG9jeA==')
     await bridge.exportPdf('Draft', 'cGRm')
+    await bridge.listInstalledFonts()
+    await bridge.loadFontForExport('Courier Prime', 'bold')
 
     expect(invoke.mock.calls.map(([command]) => command)).toEqual([
       'project_autosave',
@@ -52,7 +54,13 @@ describe('createTauriDesktopBridge', () => {
       'project_import_docx',
       'project_export_docx',
       'project_export_pdf',
+      'font_list_installed',
+      'font_load_for_export',
     ])
+    expect(invoke).toHaveBeenCalledWith('font_load_for_export', {
+      family: 'Courier Prime',
+      style: 'bold',
+    })
     expect(invoke).toHaveBeenCalledWith('project_save_ref', {
       grantId: 'grant-1',
       project,

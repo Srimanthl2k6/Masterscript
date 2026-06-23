@@ -34,6 +34,8 @@
     "allow-collaboration-lan-status",
     "allow-bootstrap-installation",
     "allow-installation-get-state",
-    "allow-installation-set-tutorial-completed"
+    "allow-installation-set-tutorial-completed",
+    "allow-font-list-installed",
+    "allow-font-load-for-export"
   ]
 }

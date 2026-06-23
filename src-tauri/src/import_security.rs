@@ -158,6 +158,70 @@ fn validate_block_array(value: Option<&Value>, label: &str) -> io::Result<()> {
                 )));
             }
         }
+        if let Some(ranges) = object.get("formatRanges") {
+            let ranges = ranges
+                .as_array()
+                .ok_or_else(|| invalid_data(format!("{label} formatRanges must be an array")))?;
+            if ranges.len() > 2_048 {
+                return Err(invalid_data(format!(
+                    "{label} block exceeds the 2,048 formatting-range limit"
+                )));
+            }
+            let text_length = object
+                .get("text")
+                .and_then(Value::as_str)
+                .map(str::len)
+                .unwrap_or_default();
+            for range in ranges {
+                let range = range.as_object().ok_or_else(|| {
+                    invalid_data(format!("{label} contains a non-object formatting range"))
+                })?;
+                let start = range.get("start").and_then(Value::as_u64).ok_or_else(|| {
+                    invalid_data(format!("{label} formatting range has an invalid start"))
+                })? as usize;
+                let end = range.get("end").and_then(Value::as_u64).ok_or_else(|| {
+                    invalid_data(format!("{label} formatting range has an invalid end"))
+                })? as usize;
+                if start >= end || end > text_length {
+                    return Err(invalid_data(format!(
+                        "{label} formatting range is outside block text"
+                    )));
+                }
+                let format = range
+                    .get("format")
+                    .and_then(Value::as_object)
+                    .ok_or_else(|| {
+                        invalid_data(format!("{label} formatting range lacks a format"))
+                    })?;
+                if format.keys().any(|key| {
+                    !matches!(
+                        key.as_str(),
+                        "bold" | "italic" | "underline" | "letterSpacing" | "fontFamily"
+                    )
+                }) {
+                    return Err(invalid_data(format!(
+                        "{label} formatting range contains an unsupported property"
+                    )));
+                }
+                for key in ["bold", "italic", "underline", "letterSpacing"] {
+                    if format.get(key).is_some_and(|value| !value.is_boolean()) {
+                        return Err(invalid_data(format!(
+                            "{label} formatting property {key} must be boolean"
+                        )));
+                    }
+                }
+                if format
+                    .get("fontFamily")
+                    .is_some_and(|value| !value.is_string())
+                    || format
+                        .get("fontFamily")
+                        .and_then(Value::as_str)
+                        .is_some_and(|family| family.trim().is_empty() || family.len() > 128)
+                {
+                    return Err(invalid_data(format!("{label} font family is invalid")));
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -355,6 +419,31 @@ mod tests {
             TEXT_IMPORT_LIMIT
         );
         assert!(read_file_bounded(&oversized, TEXT_IMPORT_LIMIT).is_err());
+    }
+
+    #[test]
+    fn validates_bounded_rich_text_ranges() {
+        let mut project = valid_project(1);
+        project["blocks"][0]["formatRanges"] = json!([{
+            "start": 0,
+            "end": 4,
+            "format": {
+                "bold": true,
+                "italic": true,
+                "underline": true,
+                "letterSpacing": true,
+                "fontFamily": "Inter"
+            }
+        }]);
+        validate_project_value(&project).expect("valid rich text");
+
+        let mut invalid_offset = project.clone();
+        invalid_offset["blocks"][0]["formatRanges"][0]["end"] = json!(99);
+        assert!(validate_project_value(&invalid_offset).is_err());
+
+        let mut invalid_property = project;
+        invalid_property["blocks"][0]["formatRanges"][0]["format"]["color"] = json!("red");
+        assert!(validate_project_value(&invalid_property).is_err());
     }
 
     #[test]

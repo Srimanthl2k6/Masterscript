@@ -117,6 +117,23 @@ describe('advanced MasterScript feature suite', () => {
     expect(exportReportWorkbookXml('Report', [['A', 'B'], ['1', '2']])).toContain('Workbook')
   })
 
+  it('preserves rich runs in HTML and RTF exports', () => {
+    const project = createEmptyProject()
+    const block = createBlock('action', 'Styled words')
+    block.formatRanges = [
+      {
+        start: 0,
+        end: 6,
+        format: { italic: true, letterSpacing: true },
+      },
+    ]
+    project.blocks = [block]
+
+    expect(exportHtmlProject(project)).toContain('font-style:italic')
+    expect(exportHtmlProject(project)).toContain('letter-spacing:0.08em')
+    expect(exportRtfProject(project)).toContain('\\i\\expndtw48')
+  })
+
   it('normalizes and checks slug lines, parentheticals, transitions, extensions, and style thresholds', () => {
     const { project } = buildAdvancedProject()
 
