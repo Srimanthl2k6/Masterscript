@@ -1,5 +1,9 @@
 import { createBlock, createEmptyProject } from '../screenplay'
-import type { ScriptProject } from '../../types/screenplay'
+import type {
+  ScriptProject,
+  TextFormat,
+  TextFormatRange,
+} from '../../types/screenplay'
 import { AdapterParseError, AdapterValidationError } from './errors'
 import {
   compactText,
@@ -11,18 +15,46 @@ import {
   stripHtmlTags,
 } from './normalize'
 import type { ScriptProjectAdapterResult } from './types'
+import { formatRuns } from '../richText'
 
 const paragraphPattern = /<Paragraph\b([^>]*)>([\s\S]*?)<\/Paragraph>/gi
-const textPattern = /<Text\b[^>]*>([\s\S]*?)<\/Text>/gi
+const textPattern = /<Text\b([^>]*)>([\s\S]*?)<\/Text>/gi
 
-const extractParagraphText = (paragraphContent: string): string => {
+const extractTextFormat = (attributes: string): TextFormat => {
+  const style = attributes.match(/Style="([^"]+)"/i)?.[1] ?? ''
+  const fontFamily = attributes.match(/Font="([^"]+)"/i)?.[1]
+  return {
+    bold: /\bBold\b/i.test(style) || undefined,
+    italic: /\bItalic\b/i.test(style) || undefined,
+    underline: /\bUnderline\b/i.test(style) || undefined,
+    letterSpacing: /Tracking="(?!0\b)[^"]+"/i.test(attributes) || undefined,
+    fontFamily,
+  }
+}
+
+const extractParagraphText = (
+  paragraphContent: string,
+): { text: string; formatRanges: TextFormatRange[] } => {
   const textNodes = [...paragraphContent.matchAll(textPattern)]
   if (textNodes.length === 0) {
-    return stripHtmlTags(paragraphContent)
+    return { text: stripHtmlTags(paragraphContent), formatRanges: [] }
   }
 
-  const merged = textNodes.map((match) => decodeEntities(match[1] ?? '')).join(' ')
-  return compactText(merged)
+  let text = ''
+  const formatRanges: TextFormatRange[] = []
+  for (const match of textNodes) {
+    const value = decodeEntities(match[2] ?? '')
+    if (text && value && !/\s$/.test(text) && !/^\s/.test(value)) {
+      text += ' '
+    }
+    const start = text.length
+    text += value
+    const format = extractTextFormat(match[1] ?? '')
+    if (value && Object.values(format).some(Boolean)) {
+      formatRanges.push({ start, end: text.length, format })
+    }
+  }
+  return { text: compactText(text), formatRanges }
 }
 
 const extractParagraphType = (rawAttributes: string): string => {
@@ -56,7 +88,7 @@ export const importFdxProject = (xml: string): ScriptProjectAdapterResult => {
     .map((match) => {
       const attributes = match[1] ?? ''
       const body = match[2] ?? ''
-      const text = extractParagraphText(body)
+      const { text, formatRanges } = extractParagraphText(body)
       if (!text) {
         return null
       }
@@ -66,7 +98,7 @@ export const importFdxProject = (xml: string): ScriptProjectAdapterResult => {
         warnings.push(warning)
       }
 
-      return createBlock(blockType, text)
+      return { ...createBlock(blockType, text), formatRanges }
     })
     .filter((block): block is NonNullable<typeof block> => block !== null)
 
@@ -94,8 +126,24 @@ export const exportProjectToFdx = (project: ScriptProject): string => {
   const paragraphs = project.blocks
     .map((block) => {
       const type = mapBlockTypeToFdxType(block.type)
-      const text = escapeXml(block.text)
-      return `      <Paragraph Type="${type}"><Text>${text}</Text></Paragraph>`
+      const textRuns = formatRuns(block.text, block.formatRanges)
+        .map((run) => {
+          const style = [
+            run.format.bold ? 'Bold' : '',
+            run.format.italic ? 'Italic' : '',
+            run.format.underline ? 'Underline' : '',
+          ].filter(Boolean).join('+')
+          const attributes = [
+            style ? ` Style="${style}"` : '',
+            run.format.fontFamily
+              ? ` Font="${escapeXml(run.format.fontFamily)}"`
+              : '',
+            run.format.letterSpacing ? ' Tracking="80"' : '',
+          ].join('')
+          return `<Text${attributes}>${escapeXml(run.text)}</Text>`
+        })
+        .join('')
+      return `      <Paragraph Type="${type}">${textRuns}</Paragraph>`
     })
     .join('\n')
 

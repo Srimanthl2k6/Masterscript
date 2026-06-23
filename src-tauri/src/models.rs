@@ -1,6 +1,45 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FontFamilyDescriptor {
+    pub family: String,
+    pub styles: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FontLoadResult {
+    pub ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub base64: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embeddable: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl FontLoadResult {
+    pub fn success(base64: String, embeddable: bool) -> Self {
+        Self {
+            ok: true,
+            base64: Some(base64),
+            embeddable: Some(embeddable),
+            error: None,
+        }
+    }
+
+    pub fn failure(error: impl Into<String>) -> Self {
+        Self {
+            ok: false,
+            base64: None,
+            embeddable: None,
+            error: Some(error.into()),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectFileRef {

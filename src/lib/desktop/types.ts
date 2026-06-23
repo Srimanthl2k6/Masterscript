@@ -109,6 +109,18 @@ export interface BinaryImportResult extends OperationResult {
   displayPath?: string
 }
 
+export interface FontFamilyDescriptor {
+  family: string
+  styles: Array<'regular' | 'bold' | 'italic' | 'bold-italic'>
+}
+
+export interface FontLoadResult {
+  ok: boolean
+  base64?: string
+  embeddable?: boolean
+  error?: string
+}
+
 export interface LegacyOperationResult extends Omit<OperationResult, 'fileRef'> {
   path?: string
 }
@@ -202,4 +214,6 @@ export interface DesktopBridge
   getInstallState(): Promise<InstallState>
   setTutorialCompleted(completed: boolean): Promise<void>
   bootstrapInstallation(): Promise<BootstrapInstallationResult>
+  listInstalledFonts(): Promise<FontFamilyDescriptor[]>
+  loadFontForExport(family: string, style: string): Promise<FontLoadResult>
 }

@@ -36,6 +36,8 @@ export interface PrintLayoutLine {
   pageIndex: number
   blockId?: string
   blockType?: BlockType
+  sourceStart?: number
+  sourceEnd?: number
 }
 
 export interface PrintLayoutPage {
@@ -169,6 +171,9 @@ const wrapBlockText = (text: string, maxChars: number): string[] => {
 
   return lines
 }
+
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 const getBlockStyle = (
   type: BlockType,
@@ -332,11 +337,33 @@ export const paginateProjectForPrint = (
       config.charWidthFactor,
     )
 
+    const lines = wrapBlockText(content, maxChars)
+    const source = style.uppercase ? block.text.toUpperCase() : block.text
+    let sourceOffset = 0
+    const lineOffsets = lines.map((line) => {
+      if (!block.formatRanges?.length) {
+        return { start: undefined, end: undefined }
+      }
+      const pattern = line
+        .split(/\s+/)
+        .map(escapeRegExp)
+        .join('\\s+')
+      const match = source.slice(sourceOffset).match(new RegExp(pattern))
+      const start = match?.index === undefined ? sourceOffset : sourceOffset + match.index
+      const end = start + (match?.[0].length ?? line.length)
+      sourceOffset = end
+      return {
+        start,
+        end,
+      }
+    })
+
     return {
       block,
       cleaned,
       style,
-      lines: wrapBlockText(content, maxChars),
+      lines,
+      lineOffsets,
     }
   })
   const nextPrintableBlockIndex = new Array<number | null>(
@@ -617,7 +644,7 @@ export const paginateProjectForPrint = (
   }
 
   for (let blockIndex = 0; blockIndex < preparedBlocks.length; blockIndex += 1) {
-    const { block, cleaned, style, lines } = preparedBlocks[blockIndex]
+    const { block, cleaned, style, lines, lineOffsets } = preparedBlocks[blockIndex]
     if (!cleaned) {
       continue
     }
@@ -704,6 +731,8 @@ export const paginateProjectForPrint = (
         role: 'body',
         blockId: block.id,
         blockType: block.type,
+        sourceStart: lineOffsets[lineIndex]?.start,
+        sourceEnd: lineOffsets[lineIndex]?.end,
       })
 
       if (block.revisionMark) {

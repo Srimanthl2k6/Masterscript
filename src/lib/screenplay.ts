@@ -12,6 +12,7 @@ import {
   type ScriptStats,
   type StoryCard,
 } from '../types/screenplay'
+import { parseSceneHeadingParts } from './sceneHeading'
 
 const wordsPerPage = 250
 
@@ -473,11 +474,7 @@ export const getScriptStats = (project: ScriptProject): ScriptStats => {
 }
 
 const parseSceneLocation = (heading: string): string => {
-  const normalized = normalizeSceneHeading(heading)
-  return normalized
-    .replace(/^(INT\.|EXT\.|INT\/EXT\.|EST\.)\s*/, '')
-    .split('-')[0]
-    .trim()
+  return parseSceneHeadingParts(normalizeSceneHeading(heading)).location
 }
 
 export type CharacterVoiceCue = 'V.O.' | 'O.S.'

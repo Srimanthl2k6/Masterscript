@@ -166,6 +166,11 @@ const createNonElectronBridge = (runtime: 'web' | 'tauri'): DesktopBridge => ({
     installState: getBrowserInstallState(),
     migrationManifest: null,
   }),
+  listInstalledFonts: async () => [],
+  loadFontForExport: async () => ({
+    ok: false,
+    error: 'Installed font bytes are available only in the Tauri desktop app.',
+  }),
 })
 
 const createElectronBridge = (api: DesktopNativeApi): DesktopBridge => ({
@@ -221,6 +226,11 @@ const createElectronBridge = (api: DesktopNativeApi): DesktopBridge => ({
       },
       migrationManifest: null,
     }),
+  listInstalledFonts: async () => [],
+  loadFontForExport: async () => ({
+    ok: false,
+    error: 'Installed font export requires the Tauri desktop app.',
+  }),
 })
 
 interface DesktopWindow extends Window {

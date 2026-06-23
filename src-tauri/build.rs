@@ -25,6 +25,8 @@ fn main() {
         "bootstrap_installation",
         "installation_get_state",
         "installation_set_tutorial_completed",
+        "font_list_installed",
+        "font_load_for_export",
     ];
 
     tauri_build::try_build(

@@ -30,12 +30,27 @@ describe('formatting engine helpers', () => {
       createBlock('scene-heading', 'EXT. ROOFTOP - NIGHT'),
       createBlock('shot', 'CLOSE ON: THE ANTENNA'),
     ]
+    project.catalog.push({
+      id: 'location-1',
+      kind: 'location',
+      name: 'Train Station',
+      notes: '',
+    })
+    project.production.breakdown.push({
+      id: 'location-2',
+      kind: 'location',
+      name: 'Museum',
+      sceneIds: [],
+      notes: '',
+    })
 
     const options = buildSmartTypeOptions(project)
 
     expect(options.characters).toContain('MAYA')
     expect(options.locations).toContain('CAFE')
     expect(options.locations).toContain('ROOFTOP')
+    expect(options.locations).toContain('TRAIN STATION')
+    expect(options.locations).toContain('MUSEUM')
     expect(options.timesOfDay).toContain('NIGHT')
     expect(options.transitions).toContain('SMASH CUT TO:')
     expect(options.shots).toContain('CLOSE ON:')

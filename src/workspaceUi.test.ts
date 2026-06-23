@@ -73,6 +73,24 @@ describe('workspace chrome UI', () => {
     expect(appSource).toContain('handleFindInputKeyDown(event, jumpToNextFindMatch)')
   })
 
+  it('replaces duplicate Writer hints with rich-text controls and a content-editable editor', () => {
+    const formattingSource = readFileSync(
+      'src/components/WriterFormattingControls.tsx',
+      'utf8',
+    )
+    const shortcutSource = readFileSync('src/lib/editorShortcuts.ts', 'utf8')
+    expect(appSource).toContain('<RichScriptBlockEditor')
+    expect(appSource).toContain('<WriterFormattingControls')
+    expect(formattingSource).toContain('className="text-formatting-panel"')
+    expect(formattingSource).toContain('Clear formatting')
+    expect(shortcutSource).toContain('format-bold')
+    expect(shortcutSource).toContain('format-italic')
+    expect(shortcutSource).toContain('format-underline')
+    expect(appSource).not.toContain('<div className="keyboard-hint-list">')
+    expect(appSource).not.toContain('<div className="shortcut-grid">')
+    expect(stylesheet).toContain('.text-formatting-panel')
+  })
+
   it('keeps tutorial instructions opaque and captures Enter before focused controls', () => {
     const tutorialSource = readFileSync(
       'src/components/GuidedTutorial.tsx',

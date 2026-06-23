@@ -44,6 +44,28 @@ describe('fdx adapter scaffold', () => {
     expect(exported).toContain('Paragraph Type="Scene Heading"')
     expect(exported).toContain('<Text>MAYA</Text>')
   })
+
+  it('round-trips FDX formatting runs', () => {
+    const project = createEmptyProject()
+    const action = createBlock('action', 'Mixed style')
+    action.formatRanges = [
+      {
+        start: 0,
+        end: 5,
+        format: { bold: true, underline: true, fontFamily: 'Inter' },
+      },
+    ]
+    project.blocks = [action]
+
+    const exported = exportProjectToFdx(project)
+    const imported = importFdxProject(exported)
+
+    expect(exported).toContain('Style="Bold+Underline"')
+    expect(exported).toContain('Font="Inter"')
+    expect(
+      imported.data.blocks.find((block) => block.text === action.text)?.formatRanges,
+    ).toEqual(action.formatRanges)
+  })
 })
 
 describe('docx adapter scaffold', () => {

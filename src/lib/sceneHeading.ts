@@ -1,17 +1,34 @@
 export const sceneHeadingTimesOfDay = [
   'MOMENTS LATER',
+  'EARLY AFTERNOON',
+  'LATE AFTERNOON',
+  'EARLY EVENING',
+  'LATE EVENING',
+  'EARLY MORNING',
+  'LATE MORNING',
+  'GOLDEN HOUR',
   'MAGIC HOUR',
+  'BLUE HOUR',
+  'DAY/NIGHT',
+  'NIGHT/DAY',
+  'LATE NIGHT',
   'SAME TIME',
   'CONTINUOUS',
+  'PRE-DAWN',
   'EVENING',
   'MORNING',
   'AFTERNOON',
+  'MIDNIGHT',
+  'TWILIGHT',
+  'SUNRISE',
+  'SUNSET',
   'LATER',
+  'NOON',
   'DAWN',
   'DUSK',
   'DAY',
   'NIGHT',
-]
+].sort((left, right) => right.length - left.length)
 
 const prefixPattern = /^(INT\.\/EXT\.|INT\/EXT\.|I\/E|INT\.|EXT\.|EST\.)\s*/
 
@@ -31,7 +48,10 @@ const escapeRegExp = (value: string): string =>
 const stripSceneNumberSuffix = (value: string): string =>
   value
     .replace(/\s*(?:[-.]?\s*)SCENE\s+[A-Z0-9]+\.?\s*$/i, '')
-    .replace(/\s*(?:[-.]?\s*)S(?:C)?\.?\s*[A-Z0-9]+\.?\s*$/i, '')
+    .replace(
+      /\s*(?:[-.]?\s*)(?:S(?:C)?\.\s*|S(?:C)?\s+)[A-Z0-9]+\.?\s*$/i,
+      '',
+    )
     .trim()
 
 export const parseSceneHeadingParts = (heading: string) => {

@@ -3,6 +3,8 @@ import type {
   BinaryImportResult,
   BootstrapInstallationResult,
   DesktopBridge,
+  FontFamilyDescriptor,
+  FontLoadResult,
   InstallState,
   LanCollaborationHostOptions,
   LanCollaborationHostResult,
@@ -99,4 +101,8 @@ export const createTauriDesktopBridge = (
     invoke<void>('installation_set_tutorial_completed', { completed }),
   bootstrapInstallation: () =>
     invoke<BootstrapInstallationResult>('bootstrap_installation'),
+  listInstalledFonts: () =>
+    invoke<FontFamilyDescriptor[]>('font_list_installed'),
+  loadFontForExport: (family, style) =>
+    invoke<FontLoadResult>('font_load_for_export', { family, style }),
 })

@@ -8,6 +8,7 @@ import {
 } from './normalize'
 import type { ScriptBlock, ScriptProject } from '../../types/screenplay'
 import type { ScriptProjectAdapterResult } from './types'
+import { formatRuns } from '../richText'
 
 interface MammothMessage {
   type: 'warning' | 'error'
@@ -61,12 +62,29 @@ const toDocxParagraph = async (project: ScriptProject) => {
   const { Paragraph, TextRun, HeadingLevel, AlignmentType } = docxModule
 
   return project.blocks.map((block) => {
-    const commonChildren = [new TextRun(block.text)]
+    const uppercase = ['scene-heading', 'character', 'transition', 'shot'].includes(
+      block.type,
+    )
+    const defaultBold = ['scene-heading', 'character', 'transition', 'shot'].includes(
+      block.type,
+    )
+    const defaultItalics = block.type === 'parenthetical' || block.type === 'note'
+    const commonChildren = formatRuns(block.text, block.formatRanges).map(
+      (run) =>
+        new TextRun({
+          text: uppercase ? run.text.toUpperCase() : run.text,
+          bold: defaultBold || run.format.bold,
+          italics: defaultItalics || run.format.italic,
+          underline: run.format.underline ? {} : undefined,
+          characterSpacing: run.format.letterSpacing ? 96 : undefined,
+          font: run.format.fontFamily,
+        }),
+    )
 
     if (block.type === 'scene-heading') {
       return new Paragraph({
         heading: HeadingLevel.HEADING_2,
-        children: [new TextRun({ text: block.text.toUpperCase(), bold: true })],
+        children: commonChildren,
         spacing: { after: 180 },
       })
     }
@@ -74,7 +92,7 @@ const toDocxParagraph = async (project: ScriptProject) => {
     if (block.type === 'character') {
       return new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: block.text.toUpperCase(), bold: true })],
+        children: commonChildren,
         spacing: { before: 120, after: 60 },
       })
     }
@@ -92,7 +110,7 @@ const toDocxParagraph = async (project: ScriptProject) => {
       return new Paragraph({
         alignment: AlignmentType.CENTER,
         indent: { left: 1400, right: 1400 },
-        children: [new TextRun({ text: block.text, italics: true })],
+        children: commonChildren,
         spacing: { after: 60 },
       })
     }
@@ -100,7 +118,7 @@ const toDocxParagraph = async (project: ScriptProject) => {
     if (block.type === 'transition') {
       return new Paragraph({
         alignment: AlignmentType.RIGHT,
-        children: [new TextRun({ text: block.text.toUpperCase(), bold: true })],
+        children: commonChildren,
         spacing: { before: 120, after: 180 },
       })
     }
