@@ -375,11 +375,20 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" signed-assets/* \
+          gh release create "$TAG" \
             --repo "$REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --verify-tag \
             --draft \
             --title "MasterScript $TAG" \
             --notes "Security hardening release with authenticated LAN collaboration, bounded imports, restricted desktop IPC, isolated updater signing, and continuous supply-chain checks."
+
+      - name: Upload signed release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: gh release upload "$TAG" signed-assets/* --repo "$REPOSITORY"
 
       - name: Verify required release artifacts
         env:
