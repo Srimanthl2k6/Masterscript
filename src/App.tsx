@@ -18,6 +18,7 @@ import WriterFormattingControls from './components/WriterFormattingControls'
 import ShortcutRemapPanel from './components/ShortcutRemapPanel'
 import AutofillSuggestions from './components/AutofillSuggestions'
 import WriterBlockActions from './components/WriterBlockActions'
+import SceneOutlineItem from './components/SceneOutlineItem'
 import { useCollaborationSession, type CollaborationStatus } from './lib/collaboration/useCollaborationSession'
 import {
   workspaceFileMenuGroups,
@@ -50,10 +51,7 @@ import type { InstallState, ProjectFileRef, RecentProjectEntry } from './lib/des
 import { legacySourceVersion } from './lib/desktop/version'
 import { useTauriCloseFlush } from './lib/desktop/useTauriCloseFlush'
 import { paginateProjectForPrint } from './lib/adapters/pagination'
-import {
-  MAX_PROJECT_JSON_BYTES,
-  validateProjectCandidate,
-} from './lib/adapters/importLimits'
+import { MAX_PROJECT_JSON_BYTES } from './lib/adapters/importLimits'
 import { pickBinaryFile, pickTextFile } from './lib/adapters/importFilePicker'
 import { runImportConversion } from './lib/adapters/importWorkerClient'
 import type { AdapterWarning } from './lib/adapters/types'
@@ -69,6 +67,12 @@ import { useSmartAutofill, type AutofillSuggestion } from './lib/useSmartAutofil
 import { formatAtOffset, updateRangesForEdits, updateRangesForTextEdit } from './lib/richText'
 import { useTextFormatting } from './lib/useTextFormatting'
 import { useInstalledFonts } from './lib/useInstalledFonts'
+import { duplicateProject } from './lib/projectDuplication'
+import { hydrateProject } from './lib/projectHydration'
+import {
+  reconcileSceneNumberLabels,
+  updateSceneNumberLabel,
+} from './lib/sceneNumbering'
 import { defaultScreenplayShortcuts, formattingActions, shortcutBlockTypes,
   shortcutFromKeyEvent, shortcutSignature } from './lib/editorShortcuts'
 import { buildCardsFromTemplate, storyTemplates } from './lib/planningTemplates'
@@ -469,104 +473,6 @@ const reorderById = <T extends { id: string }>(
   const [moved] = reordered.splice(fromIndex, 1)
   reordered.splice(toIndex, 0, moved)
   return reordered
-}
-
-const hydrateProject = (candidate: ScriptProject): ScriptProject => {
-  validateProjectCandidate(candidate)
-  const fallback = createEmptyProject()
-  return {
-    ...fallback,
-    ...candidate,
-    schemaVersion: 1,
-    meta: {
-      ...fallback.meta,
-      ...candidate.meta,
-    },
-    blocks:
-      candidate.blocks?.map((block) => ({
-        ...createBlock('action'),
-        ...block,
-      })) ?? fallback.blocks,
-    revisionSnapshots:
-      candidate.revisionSnapshots?.map((snapshot) => ({
-        ...snapshot,
-        blocks: snapshot.blocks?.map((block) => ({ ...createBlock('action'), ...block })) ?? [],
-      })) ?? fallback.revisionSnapshots,
-    revisionDraftSets: candidate.revisionDraftSets ?? fallback.revisionDraftSets,
-    dialogueStash: candidate.dialogueStash ?? fallback.dialogueStash,
-    cards: candidate.cards ?? [],
-    production: {
-      schedule: candidate.production?.schedule ?? [],
-      breakdown: candidate.production?.breakdown ?? [],
-      shots: candidate.production?.shots ?? [],
-      crew: candidate.production?.crew ?? [],
-    },
-    budget: {
-      items: candidate.budget?.items ?? [],
-    },
-    storyboards: candidate.storyboards ?? [],
-    catalog: candidate.catalog ?? [],
-    story: candidate.story ?? fallback.story,
-    characters: candidate.characters ?? fallback.characters,
-    productivity: candidate.productivity ?? fallback.productivity,
-    tagging: candidate.tagging ?? fallback.tagging,
-    advanced: {
-      ...fallback.advanced,
-      ...candidate.advanced,
-      formatting: {
-        ...fallback.advanced.formatting,
-        ...candidate.advanced?.formatting,
-      },
-      sceneNumbering: {
-        ...fallback.advanced.sceneNumbering,
-        ...candidate.advanced?.sceneNumbering,
-      },
-      titlePage: {
-        ...fallback.advanced.titlePage,
-        ...candidate.advanced?.titlePage,
-      },
-      timing: {
-        ...fallback.advanced.timing,
-        ...candidate.advanced?.timing,
-        weights: {
-          ...fallback.advanced.timing.weights,
-          ...candidate.advanced?.timing?.weights,
-        },
-      },
-      lint: {
-        ...fallback.advanced.lint,
-        ...candidate.advanced?.lint,
-      },
-      series: {
-        ...fallback.advanced.series,
-        ...candidate.advanced?.series,
-      },
-      writerRoom: {
-        ...fallback.advanced.writerRoom,
-        ...candidate.advanced?.writerRoom,
-      },
-      print: {
-        ...fallback.advanced.print,
-        ...candidate.advanced?.print,
-      },
-      accessibility: {
-        ...fallback.advanced.accessibility,
-        ...candidate.advanced?.accessibility,
-      },
-      editor: {
-        ...fallback.advanced.editor,
-        ...candidate.advanced?.editor,
-        shortcuts: {
-          ...fallback.advanced.editor.shortcuts,
-          ...candidate.advanced?.editor?.shortcuts,
-        },
-      },
-      legal: {
-        ...fallback.advanced.legal,
-        ...candidate.advanced?.legal,
-      },
-    },
-  }
 }
 
 const triggerDownload = (content: string, filename: string, mime: string) => {
@@ -1017,10 +923,6 @@ function App({ initialInstallState = null }: AppProps) {
     [scenes],
   )
 
-  const sceneNumberById = useMemo(
-    () => new Map(scenes.map((scene, index) => [scene.blockId, index + 1])),
-    [scenes],
-  )
   const sceneNumberLabelById = useMemo(
     () =>
       new Map(
@@ -1062,13 +964,13 @@ function App({ initialInstallState = null }: AppProps) {
     }
 
     return scenes.filter((scene) => {
-      const sceneNumber = String(sceneNumberById.get(scene.blockId) ?? '')
+      const sceneNumber = sceneNumberLabelById.get(scene.blockId) ?? ''
       return (
         scene.heading.toLowerCase().includes(query) ||
-        sceneNumber.includes(query)
+        sceneNumber.toLowerCase().includes(query)
       )
     })
-  }, [sceneFilterQuery, sceneNumberById, scenes])
+  }, [sceneFilterQuery, sceneNumberLabelById, scenes])
 
   const activeBlockId = selectedBlock?.id ?? project.blocks[0]?.id ?? null
   const activeEditorBlock = selectedBlock ?? project.blocks[0] ?? null
@@ -1750,7 +1652,17 @@ function App({ initialInstallState = null }: AppProps) {
     nextStatus = 'Project updated',
   ) => {
     setHistory((previous) =>
-      commitProjectHistory(previous, updater, nextStatus),
+      commitProjectHistory(
+        previous,
+        (draft) => {
+          updater(draft)
+          const reconciled = reconcileSceneNumberLabels(draft)
+          draft.advanced.sceneNumbering.numbers = {
+            ...reconciled.advanced.sceneNumbering.numbers,
+          }
+        },
+        nextStatus,
+      ),
     )
     setStatusMessage(nextStatus)
   }
@@ -1761,8 +1673,9 @@ function App({ initialInstallState = null }: AppProps) {
       nextStatus: string,
       options: { coalesceKey?: string } = {},
     ) => {
+      const reconciled = reconcileSceneNumberLabels(nextProject)
       setHistory((previous) =>
-        commitProjectReplacement(previous, nextProject, nextStatus, options),
+        commitProjectReplacement(previous, reconciled, nextStatus, options),
       )
       setStatusMessage(nextStatus)
     },
@@ -2219,6 +2132,14 @@ function App({ initialInstallState = null }: AppProps) {
       start: project.blocks.find((block) => block.id === blockId)?.text.length ?? 0,
       end: project.blocks.find((block) => block.id === blockId)?.text.length ?? 0,
     }
+
+  const onSceneNumberChange = (blockId: string, value: string) => {
+    const nextProject = updateSceneNumberLabel(project, blockId, value)
+    if (nextProject === project) {
+      return
+    }
+    commitReplacement(nextProject, 'Updated scene number')
+  }
 
   const onBlockTypeChange = (
     blockId: string,
@@ -2682,6 +2603,59 @@ function App({ initialInstallState = null }: AppProps) {
     writeRecentProjectSnapshot(project)
     pushRecentProject(`${project.meta.title || 'untitled'}.msproj.json`, 'project', project.id)
     setStatusMessage('Project downloaded as JSON')
+  }
+
+  const duplicateCurrentProject = async () => {
+    const duplicate = duplicateProject(project)
+    const serialized = JSON.stringify(duplicate, null, 2)
+
+    if (desktopBridge.runtime !== 'web') {
+      const result = await desktopBridge.saveProject(
+        duplicate,
+        duplicate.meta.title,
+      )
+      if (!result.ok) {
+        if (!result.cancelled) {
+          setStatusMessage(result.error ?? 'Project duplication failed')
+        }
+        return
+      }
+
+      await collaboration.stop()
+      await desktopBridge.autosave(duplicate)
+      setHistory(replaceProjectHistory(duplicate))
+      setAppView('workspace')
+      setActiveTab('draft')
+      setPreviewPageIndex(0)
+      setSavedFileRef(result.fileRef ?? null)
+      setSavedPath(
+        result.fileRef?.displayPath ?? 'Duplicated with desktop file picker',
+      )
+      writeRecentProjectSnapshot(duplicate)
+      pushRecentProject(
+        result.fileRef?.displayPath ?? duplicate.meta.title,
+        'project',
+        duplicate.id,
+        result.fileRef,
+      )
+      setStatusMessage('Project duplicated')
+      setAutosaveState('saved')
+      return
+    }
+
+    await collaboration.stop()
+    const filename = `${duplicate.meta.title || 'untitled'}.msproj.json`
+    triggerDownload(serialized, filename, 'application/json')
+    setHistory(replaceProjectHistory(duplicate))
+    setAppView('workspace')
+    setActiveTab('draft')
+    setPreviewPageIndex(0)
+    setSavedFileRef(null)
+    setSavedPath(filename)
+    writeRecentProjectSnapshot(duplicate)
+    pushRecentProject(filename, 'project', duplicate.id)
+    setStatusMessage('Project duplicated and downloaded')
+    setAutosaveState('saved')
   }
 
   const openProject = async () => {
@@ -5042,6 +5016,9 @@ function App({ initialInstallState = null }: AppProps) {
       case 'open':
         void openProject()
         return
+      case 'duplicate':
+        void duplicateCurrentProject()
+        return
       case 'import-fdx':
         void importFdx()
         return
@@ -7221,17 +7198,19 @@ function App({ initialInstallState = null }: AppProps) {
                 <p className="small-copy">No scenes match this filter.</p>
               )}
               {filteredScenes.map((scene) => (
-                <button
+                <SceneOutlineItem
                   key={scene.blockId}
-                  className={
-                    scene.blockId === resolvedSelectedSceneId
-                      ? 'outline-item active'
-                      : 'outline-item'
+                  scene={scene}
+                  numberLabel={sceneNumberLabelById.get(scene.blockId) ?? ''}
+                  active={scene.blockId === resolvedSelectedSceneId}
+                  color={storyState.sceneMeta[scene.blockId]?.color}
+                  locked={project.advanced.sceneNumbering.locked}
+                  actBreak={storyState.sceneMeta[scene.blockId]?.actBreak}
+                  status={storyState.sceneMeta[scene.blockId]?.status}
+                  onNumberChange={(value) =>
+                    onSceneNumberChange(scene.blockId, value)
                   }
-                  style={{
-                    borderLeftColor: storyState.sceneMeta[scene.blockId]?.color ?? undefined,
-                  }}
-                  onClick={() => {
+                  onSelect={() => {
                     setSelectedSceneId(scene.blockId)
                     if (activeTab === 'draft') {
                       setSelectedBlockId(scene.blockId)
@@ -7240,18 +7219,7 @@ function App({ initialInstallState = null }: AppProps) {
                       jumpToDraft(scene.blockId)
                     }
                   }}
-                >
-                  <strong>
-                    SCENE {sceneNumberById.get(scene.blockId) ?? 1}
-                  </strong>
-                  <span>{scene.heading}</span>
-                  {storyState.sceneMeta[scene.blockId]?.actBreak && (
-                    <span>{storyState.sceneMeta[scene.blockId].actBreak}</span>
-                  )}
-                  {storyState.sceneMeta[scene.blockId]?.status && (
-                    <span>{storyState.sceneMeta[scene.blockId].status}</span>
-                  )}
-                </button>
+                />
               ))}
             </nav>
 
@@ -7378,7 +7346,7 @@ function App({ initialInstallState = null }: AppProps) {
         <span>
           Last update: {new Date(project.meta.updatedAt).toLocaleString()}
           {selectedScene
-            ? ` | Scene: S${sceneNumberById.get(selectedScene.blockId) ?? 1} - ${selectedScene.heading}`
+            ? ` | Scene: S${sceneNumberLabelById.get(selectedScene.blockId) ?? 1} - ${selectedScene.heading}`
             : ''}
           {` | Words: ${stats.wordCount} | Pages: ${stats.estimatedPages}`}
         </span>

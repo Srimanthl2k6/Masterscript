@@ -19,6 +19,7 @@ use commands::{
     project_save_file, project_save_ref, project_write_recent_snapshot,
 };
 use lan::{LanRelayState, LanTransportState};
+use tauri::webview::PageLoadEvent;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -27,6 +28,17 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(LanRelayState::default())
         .manage(LanTransportState::default())
+        .on_page_load(|webview, payload| {
+            if payload.event() == PageLoadEvent::Finished {
+                let window = webview.window();
+                if let Err(error) = window.maximize() {
+                    eprintln!("failed to maximize MasterScript window: {error}");
+                }
+                if let Err(error) = window.show() {
+                    eprintln!("failed to show MasterScript window: {error}");
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             project_autosave,
             project_read_autosave,

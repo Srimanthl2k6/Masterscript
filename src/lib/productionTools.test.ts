@@ -118,11 +118,14 @@ describe('production tools', () => {
   it('builds call sheets and sides for a selected shoot day', () => {
     const { project, sceneB } = buildProductionProject()
     project.blocks[5].revisionMark = true
+    project.advanced.sceneNumbering.numbers[sceneB.id] = '2A'
 
     const callSheet = buildCallSheet(project, 2)
     const sides = buildScriptSides(project, 2)
 
     expect(callSheet.scenes[0].heading).toBe('EXT. PIER - NIGHT')
+    expect(callSheet.scenes[0].sceneNumber).toBe('2A')
+    expect(buildStripboard(project)[1].sceneNumber).toBe('2A')
     expect(callSheet.cast).toEqual(['JON'])
     expect(callSheet.crew[0].name).toBe('1st AD')
     expect(sides.scenes[0].sceneId).toBe(sceneB.id)

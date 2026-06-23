@@ -2,6 +2,7 @@ export type WorkspaceFileMenuItemId =
   | 'home'
   | 'new'
   | 'open'
+  | 'duplicate'
   | 'import-fdx'
   | 'import-fountain'
   | 'import-docx'
@@ -34,6 +35,7 @@ export const workspaceFileMenuGroups: WorkspaceFileMenuGroup[] = [
       { id: 'home', label: 'Home' },
       { id: 'new', label: 'New' },
       { id: 'open', label: 'Open' },
+      { id: 'duplicate', label: 'Duplicate' },
     ],
   },
   {

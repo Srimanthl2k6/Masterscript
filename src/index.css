@@ -1964,13 +1964,54 @@ kbd {
   color: #6f6f6f;
 }
 
-.outline-item strong {
+.scene-number-editor {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.scene-number-editor > span {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.outline-item span {
+.scene-number-input {
+  width: 4.5rem;
+  min-width: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  padding: 0.18rem 0.35rem;
+  font: 600 11px/1.2 'Courier Prime', 'Courier New', monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.scene-number-input:focus {
+  outline: 1px solid var(--border-strong);
+  border-color: var(--border-strong);
+}
+
+.scene-number-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.outline-scene-link {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: grid;
+  gap: 0.28rem;
+  text-align: left;
+}
+
+.outline-scene-link span {
   font-size: 11px;
   line-height: 1.3;
 }
@@ -3079,6 +3120,11 @@ kbd {
 
 :root[data-theme='light'] .outline-item {
   color: #4f4f4f;
+}
+
+:root[data-theme='light'] .scene-number-input {
+  background: rgba(0, 0, 0, 0.03);
+  color: #111111;
 }
 
 :root[data-theme='light'] .outline-item.active {

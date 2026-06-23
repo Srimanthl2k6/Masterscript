@@ -5,6 +5,7 @@ import { legacySourceVersion } from '../src/lib/desktop/version'
 
 const require = createRequire(import.meta.url)
 const packageJson = require('../package.json')
+const cargoManifest = readFileSync('src-tauri/Cargo.toml', 'utf8')
 const workflow = readFileSync('.github/workflows/tauri-pass1-proof.yml', 'utf8')
 const releaseWorkflow = readFileSync('.github/workflows/release.yml', 'utf8')
 
@@ -18,6 +19,7 @@ describe('Tauri release workflows', () => {
     const tauriConfig = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'))
     expect(legacySourceVersion).toBe('0.1.14')
     expect(tauriConfig.version).toBe(packageJson.version)
+    expect(cargoManifest).toContain(`version = "${packageJson.version}"`)
   })
 
   it('publishes signed Tauri artifacts only after verification', () => {
@@ -47,6 +49,8 @@ describe('Tauri release workflows', () => {
     expect(releaseWorkflow).toContain('MasterScript.linux.x86_64.AppImage')
     expect(releaseWorkflow).toContain('benchmark:tauri')
     expect(releaseWorkflow).not.toContain('electron-builder')
+    expect(releaseWorkflow).toContain('editor stability')
+    expect(releaseWorkflow.toLowerCase()).not.toContain('security hardening release')
   })
 
   it('builds internal artifacts on Windows, macOS, and Linux without publishing', () => {

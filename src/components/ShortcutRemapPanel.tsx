@@ -20,7 +20,7 @@ export default function ShortcutRemapPanel({
 }: Props) {
   return (
     <details className="shortcut-remap-panel">
-      <summary>Remap shortcuts</summary>
+      <summary>Shortcuts</summary>
       <div className="shortcut-remap-list">
         {screenplay.map((item) => (
           <label key={`remap-${item.type}`}>

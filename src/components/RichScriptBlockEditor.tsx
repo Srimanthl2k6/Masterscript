@@ -1,17 +1,17 @@
 import {
   forwardRef,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
 } from 'react'
 import type {
   ClipboardEvent,
-  CSSProperties,
   FormEvent,
   KeyboardEvent,
 } from 'react'
 import { formatRuns } from '../lib/richText'
-import type { ScriptBlock } from '../types/screenplay'
+import type { ScriptBlock, TextFormat } from '../types/screenplay'
 
 export interface TextSelection {
   start: number
@@ -103,16 +103,24 @@ const restoreSelection = (
   selection.addRange(range)
 }
 
-const runStyle = (block: ScriptBlock, index: number): CSSProperties => {
-  const format = formatRuns(block.text, block.formatRanges)[index]?.format ?? {}
-  return {
-    fontFamily: format.fontFamily
-      ? `"${format.fontFamily}", "Courier Prime", monospace`
-      : undefined,
-    fontStyle: format.italic ? 'italic' : undefined,
-    fontWeight: format.bold ? 700 : undefined,
-    letterSpacing: format.letterSpacing ? '0.08em' : undefined,
-    textDecoration: format.underline ? 'underline' : undefined,
+const hasFormatting = (format: TextFormat): boolean =>
+  Object.keys(format).length > 0
+
+const applyRunStyle = (element: HTMLSpanElement, format: TextFormat) => {
+  if (format.fontFamily) {
+    element.style.fontFamily = `"${format.fontFamily}", "Courier Prime", monospace`
+  }
+  if (format.italic) {
+    element.style.fontStyle = 'italic'
+  }
+  if (format.bold) {
+    element.style.fontWeight = '700'
+  }
+  if (format.letterSpacing) {
+    element.style.letterSpacing = '0.08em'
+  }
+  if (format.underline) {
+    element.style.textDecoration = 'underline'
   }
 }
 
@@ -132,10 +140,77 @@ const RichScriptBlockEditor = forwardRef<
   forwardedRef,
 ) {
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const pendingSelectionRef = useRef<TextSelection | null>(null)
+  const renderedSignatureRef = useRef('')
+  const renderedWithFormattingRef = useRef(false)
   const runs = useMemo(
     () => formatRuns(block.text, block.formatRanges),
     [block.formatRanges, block.text],
   )
+  const renderSignature = useMemo(
+    () =>
+      JSON.stringify(
+        runs.map((run) => [
+          run.start,
+          run.end,
+          run.text,
+          run.format,
+        ]),
+      ),
+    [runs],
+  )
+  const renderHasFormatting = useMemo(
+    () => runs.some((run) => hasFormatting(run.format)),
+    [runs],
+  )
+
+  useLayoutEffect(() => {
+    const root = rootRef.current
+    if (!root) {
+      return
+    }
+
+    const currentText = root.innerText.replace(/\r/g, '')
+    const textMatches = (currentText === '\n' ? '' : currentText) === block.text
+    if (
+      textMatches &&
+      renderSignature === renderedSignatureRef.current
+    ) {
+      return
+    }
+    if (
+      textMatches &&
+      !renderHasFormatting &&
+      !renderedWithFormattingRef.current
+    ) {
+      renderedSignatureRef.current = renderSignature
+      return
+    }
+
+    const selection =
+      document.activeElement === root
+        ? pendingSelectionRef.current ?? selectionWithin(root)
+        : null
+    const fragment = document.createDocumentFragment()
+    for (const run of runs) {
+      if (!hasFormatting(run.format)) {
+        fragment.append(document.createTextNode(run.text))
+        continue
+      }
+      const span = document.createElement('span')
+      span.textContent = run.text
+      applyRunStyle(span, run.format)
+      fragment.append(span)
+    }
+    root.replaceChildren(fragment)
+    renderedSignatureRef.current = renderSignature
+    renderedWithFormattingRef.current = renderHasFormatting
+    pendingSelectionRef.current = null
+
+    if (selection && document.activeElement === root) {
+      restoreSelection(root, selection.start, selection.end)
+    }
+  }, [block.text, renderHasFormatting, renderSignature, runs])
 
   const readSelection = (): TextSelection => {
     const root = rootRef.current
@@ -150,6 +225,7 @@ const RichScriptBlockEditor = forwardRef<
     getSelection: readSelection,
     setSelectionRange: (start, end) => {
       if (rootRef.current) {
+        pendingSelectionRef.current = { start, end }
         restoreSelection(rootRef.current, start, end)
       }
     },
@@ -161,6 +237,7 @@ const RichScriptBlockEditor = forwardRef<
   const handleInput = (event: FormEvent<HTMLDivElement>) => {
     const text = event.currentTarget.innerText.replace(/\r/g, '')
     const selection = selectionWithin(event.currentTarget)
+    pendingSelectionRef.current = selection
     onChange(text === '\n' ? '' : text, selection)
   }
 
@@ -189,13 +266,7 @@ const RichScriptBlockEditor = forwardRef<
       onKeyUp={reportSelection}
       onMouseUp={reportSelection}
       onPaste={handlePaste}
-    >
-      {runs.map((run, index) => (
-        <span key={`${run.start}-${run.end}`} style={runStyle(block, index)}>
-          {run.text}
-        </span>
-      ))}
-    </div>
+    />
   )
 })
 

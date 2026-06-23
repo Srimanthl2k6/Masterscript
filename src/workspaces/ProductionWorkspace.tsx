@@ -91,6 +91,17 @@ const ProductionWorkspace = ({
     () => new Map(scenes.map((scene) => [scene.blockId, scene.heading])),
     [scenes],
   )
+  const sceneNumberById = useMemo(
+    () =>
+      new Map(
+        scenes.map((scene, index) => [
+          scene.blockId,
+          project.advanced.sceneNumbering.numbers[scene.blockId] ??
+            String(index + 1),
+        ]),
+      ),
+    [project.advanced.sceneNumbering.numbers, scenes],
+  )
 
   return (
     <section className="module-layout module-surface tab-enter">
@@ -251,9 +262,9 @@ const ProductionWorkspace = ({
               }
             >
               <option value="">Unassigned</option>
-              {scenes.map((scene, index) => (
+              {scenes.map((scene) => (
                 <option key={scene.blockId} value={scene.blockId}>
-                  S{index + 1} - {scene.heading}
+                  S{sceneNumberById.get(scene.blockId) ?? '-'} - {scene.heading}
                 </option>
               ))}
             </select>

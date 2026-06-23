@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "MasterScript",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "identifier": "com.masterscript.desktop",
   "mainBinaryName": "masterscript",
   "build": {
@@ -18,7 +18,10 @@
         "height": 980,
         "minWidth": 1100,
         "minHeight": 700,
-        "resizable": true
+        "resizable": true,
+        "maximized": true,
+        "visible": false,
+        "backgroundColor": "#0a0a0a"
       }
     ],
     "security": {

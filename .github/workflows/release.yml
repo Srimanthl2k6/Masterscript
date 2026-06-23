@@ -268,7 +268,7 @@ jobs:
             --arg baseUrl "$BASE_URL" \
             '{
               version: $version,
-              notes: "MasterScript security hardening release",
+              notes: "MasterScript 0.5.0 adds editor stability, project duplication, editable scene suffixes, and flash-free maximized startup.",
               pub_date: $pubDate,
               platforms: {
                 "windows-x86_64": {
@@ -381,7 +381,7 @@ jobs:
             --verify-tag \
             --draft \
             --title "MasterScript $TAG" \
-            --notes "Security hardening release with authenticated LAN collaboration, bounded imports, restricted desktop IPC, isolated updater signing, and continuous supply-chain checks."
+            --notes "MasterScript 0.5.0 adds editor stability, project duplication, editable scene suffixes, and flash-free maximized startup."
 
       - name: Upload signed release assets
         env:
