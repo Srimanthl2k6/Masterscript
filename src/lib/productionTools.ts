@@ -14,7 +14,7 @@ export interface StripboardStrip {
   id: string
   day: number
   sceneId: string | null
-  sceneNumber: number | null
+  sceneNumber: string | null
   heading: string
   intExt: string
   dayNight: string
@@ -36,7 +36,7 @@ export interface DoodGrid {
 
 export interface CallSheetScene {
   sceneId: string | null
-  sceneNumber: number | null
+  sceneNumber: string | null
   heading: string
   location: string
   notes: string
@@ -123,7 +123,13 @@ const stripColorForHeading = (heading: string): string => {
 const sceneMaps = (project: ScriptProject) => {
   const scenes = extractScenes(project)
   const headingById = new Map(scenes.map((scene) => [scene.blockId, scene.heading]))
-  const numberById = new Map(scenes.map((scene, index) => [scene.blockId, index + 1]))
+  const numberById = new Map(
+    scenes.map((scene, index) => [
+      scene.blockId,
+      project.advanced.sceneNumbering.numbers[scene.blockId] ??
+        String(index + 1),
+    ]),
+  )
 
   return { headingById, numberById, scenes }
 }

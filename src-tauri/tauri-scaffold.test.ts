@@ -37,7 +37,13 @@ describe('Pass 1 Tauri shell', () => {
       height: 980,
       minWidth: 1100,
       minHeight: 700,
+      maximized: true,
+      visible: false,
+      backgroundColor: '#0a0a0a',
     })
+    expect(rustLibrary).toContain('PageLoadEvent::Finished')
+    expect(rustLibrary).toContain('window.maximize()')
+    expect(rustLibrary).toContain('window.show()')
   })
 
   it('references icon assets that are tracked in the repository', () => {

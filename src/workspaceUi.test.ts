@@ -15,6 +15,7 @@ describe('workspace chrome UI', () => {
       'Home',
       'New',
       'Open',
+      'Duplicate',
       'Import FDX',
       'Import Fountain',
       'Import DOCX',
@@ -89,6 +90,34 @@ describe('workspace chrome UI', () => {
     expect(appSource).not.toContain('<div className="keyboard-hint-list">')
     expect(appSource).not.toContain('<div className="shortcut-grid">')
     expect(stylesheet).toContain('.text-formatting-panel')
+  })
+
+  it('keeps the rich-text editing surface outside React child reconciliation', () => {
+    const editorSource = readFileSync(
+      'src/components/RichScriptBlockEditor.tsx',
+      'utf8',
+    )
+
+    expect(editorSource).toContain('replaceChildren')
+    expect(editorSource).not.toContain('{runs.map(')
+  })
+
+  it('labels shortcut settings clearly and exposes editable scene numbers', () => {
+    const shortcutPanelSource = readFileSync(
+      'src/components/ShortcutRemapPanel.tsx',
+      'utf8',
+    )
+    const sceneOutlineSource = readFileSync(
+      'src/components/SceneOutlineItem.tsx',
+      'utf8',
+    )
+
+    expect(shortcutPanelSource).toContain('<summary>Shortcuts</summary>')
+    expect(shortcutPanelSource).not.toContain('Remap shortcuts')
+    expect(appSource).toContain('<SceneOutlineItem')
+    expect(sceneOutlineSource).toContain('className="scene-number-input"')
+    expect(appSource).toContain('updateSceneNumberLabel')
+    expect(stylesheet).toContain('.scene-number-input')
   })
 
   it('keeps tutorial instructions opaque and captures Enter before focused controls', () => {
