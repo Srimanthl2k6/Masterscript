@@ -111,13 +111,21 @@ describe('workspace chrome UI', () => {
       'src/components/SceneOutlineItem.tsx',
       'utf8',
     )
+    const sceneNumberInputSource = readFileSync(
+      'src/components/SceneNumberInlineInput.tsx',
+      'utf8',
+    )
 
     expect(shortcutPanelSource).toContain('<summary>Shortcuts</summary>')
     expect(shortcutPanelSource).not.toContain('Remap shortcuts')
     expect(appSource).toContain('<SceneOutlineItem')
-    expect(sceneOutlineSource).toContain('className="scene-number-input"')
+    expect(appSource).toContain('<SceneNumberInlineInput')
+    expect(sceneNumberInputSource).toContain('className="scene-number-inline-input"')
+    expect(sceneOutlineSource).not.toContain('className="scene-number-input"')
+    expect(appSource).not.toContain('Manual scene numbering')
+    expect(appSource).not.toContain('manualMode')
     expect(appSource).toContain('updateSceneNumberLabel')
-    expect(stylesheet).toContain('.scene-number-input')
+    expect(stylesheet).toContain('.scene-number-inline-input')
   })
 
   it('keeps tutorial instructions opaque and captures Enter before focused controls', () => {

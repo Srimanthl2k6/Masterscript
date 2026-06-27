@@ -4,6 +4,7 @@ import type { CharacterVoiceCue } from './screenplay'
 import type { SmartTypeOptions } from './formattingEngine'
 import {
   extractSceneHeadingLocationQuery,
+  isMeaningfulAutofillMatch,
   rankSuggestions,
 } from './smartAutofill'
 
@@ -50,8 +51,15 @@ export const useSmartAutofill = (
       }
       const query = selectedBlock.text.trim()
       if (!query) return []
+      if (
+        characterSuggestions.some(
+          (name) => name.trim().toUpperCase() === query.toUpperCase(),
+        )
+      ) {
+        return []
+      }
       return rankSuggestions(query, characterSuggestions)
-        .filter((name) => name.trim().toUpperCase() !== query.toUpperCase())
+        .filter((name) => isMeaningfulAutofillMatch(query, name))
         .map((name) => ({
           id: `character-${name}`,
           label: name,
@@ -62,8 +70,15 @@ export const useSmartAutofill = (
     if (selectedBlock.type === 'scene-heading') {
       const query = extractSceneHeadingLocationQuery(selectedBlock.text)
       if (!query) return []
+      if (
+        smartTypeOptions.locations.some(
+          (location) => location.trim().toUpperCase() === query.toUpperCase(),
+        )
+      ) {
+        return []
+      }
       return rankSuggestions(query, smartTypeOptions.locations)
-        .filter((location) => location.trim().toUpperCase() !== query.toUpperCase())
+        .filter((location) => isMeaningfulAutofillMatch(query, location))
         .map((location) => ({
           id: `location-${location}`,
           label: location,

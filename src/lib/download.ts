@@ -1,5 +1,5 @@
 const releaseBaseUrl =
-  'https://github.com/Srimanthl2k6/Masterscript/releases/download/v0.6.0'
+  'https://github.com/Srimanthl2k6/Masterscript/releases/download/v0.6.1'
 
 export const MASTER_SCRIPT_DOWNLOAD_URL =
   `${releaseBaseUrl}/MasterScript.Setup.exe`
