@@ -268,7 +268,7 @@ jobs:
             --arg baseUrl "$BASE_URL" \
             '{
               version: $version,
-              notes: "MasterScript 0.5.0 adds editor stability, project duplication, editable scene suffixes, and flash-free maximized startup.",
+              notes: "MasterScript 0.6.0 fixes autofill exact-match handling, adds manual scene numbering with reflow, and preserves editor stability.",
               pub_date: $pubDate,
               platforms: {
                 "windows-x86_64": {
@@ -381,7 +381,7 @@ jobs:
             --verify-tag \
             --draft \
             --title "MasterScript $TAG" \
-            --notes "MasterScript 0.5.0 adds editor stability, project duplication, editable scene suffixes, and flash-free maximized startup."
+            --notes "MasterScript 0.6.0 fixes autofill exact-match handling, adds manual scene numbering with reflow, and preserves editor stability."
 
       - name: Upload signed release assets
         env:

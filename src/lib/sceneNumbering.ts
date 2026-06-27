@@ -25,6 +25,75 @@ const sceneNumberMap = (
     }),
   )
 
+interface ParsedSceneNumber {
+  number: number
+  suffix: string
+}
+
+const parseSceneNumberLabel = (
+  input: string,
+  fallbackNumber: number,
+): ParsedSceneNumber => {
+  const numeric = input.trim().match(/^(\d+)/)?.[1]
+  return {
+    number: numeric ? Math.max(1, Number(numeric)) : fallbackNumber,
+    suffix: sanitizeSceneNumberSuffix(input),
+  }
+}
+
+const formatSceneNumberLabel = ({ number, suffix }: ParsedSceneNumber): string =>
+  `${number}${suffix}`
+
+const manualSceneNumberMap = (
+  project: ScriptProject,
+  blockId: string,
+  input: string,
+): Record<string, string> => {
+  const scenes = extractScenes(project)
+  const entries = scenes.map((scene, index) => ({
+    blockId: scene.blockId,
+    current: parseSceneNumberLabel(
+      project.advanced.sceneNumbering.numbers[scene.blockId] ?? String(index + 1),
+      index + 1,
+    ),
+  }))
+  const selected = entries.find((entry) => entry.blockId === blockId)
+  if (!selected) {
+    return project.advanced.sceneNumbering.numbers
+  }
+
+  const requested = parseSceneNumberLabel(input, selected.current.number)
+  const oldNumber = selected.current.number
+  const targetNumber = requested.number
+
+  return Object.fromEntries(
+    entries.map((entry) => {
+      if (entry.blockId === blockId) {
+        return [entry.blockId, formatSceneNumberLabel(requested)]
+      }
+
+      let number = entry.current.number
+      if (targetNumber < oldNumber) {
+        if (number >= targetNumber && number < oldNumber) {
+          number += 1
+        }
+      } else if (targetNumber > oldNumber) {
+        if (number <= targetNumber && number > oldNumber) {
+          number -= 1
+        }
+      }
+
+      return [
+        entry.blockId,
+        formatSceneNumberLabel({
+          number,
+          suffix: entry.current.suffix,
+        }),
+      ]
+    }),
+  )
+}
+
 const sameNumberMap = (
   left: Record<string, string>,
   right: Record<string, string>,
@@ -40,7 +109,10 @@ const sameNumberMap = (
 export const reconcileSceneNumberLabels = (
   project: ScriptProject,
 ): ScriptProject => {
-  if (project.advanced.sceneNumbering.locked) {
+  if (
+    project.advanced.sceneNumbering.locked ||
+    project.advanced.sceneNumbering.manualMode
+  ) {
     return project
   }
 
@@ -68,7 +140,9 @@ export const updateSceneNumberLabel = (
     return project
   }
 
-  const numbers = sceneNumberMap(project, { [blockId]: input })
+  const numbers = project.advanced.sceneNumbering.manualMode
+    ? manualSceneNumberMap(project, blockId, input)
+    : sceneNumberMap(project, { [blockId]: input })
   if (sameNumberMap(numbers, project.advanced.sceneNumbering.numbers)) {
     return project
   }

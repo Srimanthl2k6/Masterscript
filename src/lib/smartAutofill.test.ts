@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  shouldApplyAutofillSuggestionOnEnter,
   rankSuggestions,
   replaceSceneHeadingLocation,
 } from './smartAutofill'
@@ -42,5 +43,77 @@ describe('smart autofill', () => {
         'NEW PIER',
       ),
     ).toBe('EXT. NEW PIER - DAY/NIGHT SCENE 7')
+  })
+
+  it('does not accept a character autofill on Enter for exact typed names', () => {
+    expect(
+      shouldApplyAutofillSuggestionOnEnter(
+        { type: 'character', text: 'SRIRAM' },
+        { kind: 'character', value: 'MAHI' },
+        {
+          characterSuggestions: ['MAHI', 'SRIRAM'],
+          locations: [],
+        },
+      ),
+    ).toBe(false)
+    expect(
+      shouldApplyAutofillSuggestionOnEnter(
+        { type: 'character', text: 'SRIRAM' },
+        { kind: 'character', value: 'SRIRAM' },
+        {
+          characterSuggestions: ['MAHI'],
+          locations: [],
+        },
+      ),
+    ).toBe(false)
+  })
+
+  it('still accepts a character autofill on Enter for partial input', () => {
+    expect(
+      shouldApplyAutofillSuggestionOnEnter(
+        { type: 'character', text: 'SRIRA' },
+        { kind: 'character', value: 'SRIRAM' },
+        {
+          characterSuggestions: ['MAHI', 'SRIRAM'],
+          locations: [],
+        },
+      ),
+    ).toBe(true)
+  })
+
+  it('does not accept a location autofill on Enter for exact or complete headings', () => {
+    expect(
+      shouldApplyAutofillSuggestionOnEnter(
+        { type: 'scene-heading', text: 'EXT. MAHI HOUSE - DAY' },
+        { kind: 'location', value: 'SRIRAM HOUSE' },
+        {
+          characterSuggestions: [],
+          locations: ['MAHI HOUSE', 'SRIRAM HOUSE'],
+        },
+      ),
+    ).toBe(false)
+    expect(
+      shouldApplyAutofillSuggestionOnEnter(
+        { type: 'scene-heading', text: 'EXT. ROAD - DAY' },
+        { kind: 'location', value: 'MAHI HOUSE' },
+        {
+          characterSuggestions: [],
+          locations: ['MAHI HOUSE', 'SRIRAM HOUSE'],
+        },
+      ),
+    ).toBe(false)
+  })
+
+  it('still accepts a location autofill on Enter for partial headings', () => {
+    expect(
+      shouldApplyAutofillSuggestionOnEnter(
+        { type: 'scene-heading', text: 'EXT. MAH' },
+        { kind: 'location', value: 'MAHI HOUSE' },
+        {
+          characterSuggestions: [],
+          locations: ['MAHI HOUSE', 'SRIRAM HOUSE'],
+        },
+      ),
+    ).toBe(true)
   })
 })

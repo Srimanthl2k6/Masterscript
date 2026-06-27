@@ -31,6 +31,7 @@ interface RichScriptBlockEditorProps {
   className: string
   placeholder: string
   onChange: (text: string, selection: TextSelection) => void
+  onBlur: () => void
   onFocus: () => void
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void
   onSelectionChange: (selection: TextSelection) => void
@@ -133,6 +134,7 @@ const RichScriptBlockEditor = forwardRef<
     className,
     placeholder,
     onChange,
+    onBlur,
     onFocus,
     onKeyDown,
     onSelectionChange,
@@ -261,6 +263,7 @@ const RichScriptBlockEditor = forwardRef<
         onFocus()
         reportSelection()
       }}
+      onBlur={onBlur}
       onInput={handleInput}
       onKeyDown={onKeyDown}
       onKeyUp={reportSelection}

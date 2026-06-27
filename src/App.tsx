@@ -62,7 +62,7 @@ import {
   markLastTwoDialogueGroupsAsDual,
   rebuildCatalogFromScript,
 } from './lib/formattingEngine'
-import { replaceSceneHeadingLocation } from './lib/smartAutofill'
+import { replaceSceneHeadingLocation, shouldApplyAutofillSuggestionOnEnter } from './lib/smartAutofill'
 import { useSmartAutofill, type AutofillSuggestion } from './lib/useSmartAutofill'
 import { formatAtOffset, updateRangesForEdits, updateRangesForTextEdit } from './lib/richText'
 import { useTextFormatting } from './lib/useTextFormatting'
@@ -1981,6 +1981,11 @@ function App({ initialInstallState = null }: AppProps) {
     }, historyLabel)
   }
 
+  const updateSceneNumberingManualMode = (value: boolean) =>
+    commit((draft) => {
+      draft.advanced.sceneNumbering.manualMode = value
+    }, value ? 'Enabled manual scene numbering' : 'Enabled automatic scene numbering')
+
   const onContinuousDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     const value = event.target.value
     commit((draft) => {
@@ -2367,14 +2372,23 @@ function App({ initialInstallState = null }: AppProps) {
         return
       }
       if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault()
-        applyAutofillSuggestion(
-          blockId,
+        const suggestion =
           activeAutofillSuggestions[
             Math.min(activeSuggestionIndex, activeAutofillSuggestions.length - 1)
-          ],
-        )
-        return
+          ]
+        const target = project.blocks.find((block) => block.id === blockId)
+        if (
+          target &&
+          shouldApplyAutofillSuggestionOnEnter(target, suggestion, {
+            characterSuggestions,
+            locations: smartTypeOptions.locations,
+          })
+        ) {
+          event.preventDefault()
+          applyAutofillSuggestion(blockId, suggestion)
+          return
+        }
+        setDismissedSuggestionText(target?.text ?? '')
       }
     }
 
@@ -5587,6 +5601,11 @@ function App({ initialInstallState = null }: AppProps) {
                                 setSelectedSceneId(block.id)
                               }
                             }}
+                            onBlur={() => {
+                              if (activeBlockId === block.id) {
+                                setDismissedSuggestionText(block.text)
+                              }
+                            }}
                             onSelectionChange={(selection) => {
                               if (activeBlockId === block.id) {
                                 setActiveTextSelection(selection)
@@ -5798,6 +5817,17 @@ function App({ initialInstallState = null }: AppProps) {
                       }
                     />
                     <span>Show scene numbers</span>
+                  </label>
+                  <label
+                    className="toggle-row compact"
+                    title="Manual numbering lets scene number edits reflow colliding labels instead of following scene order automatically."
+                  >
+                    <input
+                      type="checkbox"
+                      checked={project.advanced.sceneNumbering.manualMode}
+                      onChange={(event) => updateSceneNumberingManualMode(event.target.checked)}
+                    />
+                    <span>Manual scene numbering</span>
                   </label>
                 </div>
 
@@ -7205,6 +7235,7 @@ function App({ initialInstallState = null }: AppProps) {
                   active={scene.blockId === resolvedSelectedSceneId}
                   color={storyState.sceneMeta[scene.blockId]?.color}
                   locked={project.advanced.sceneNumbering.locked}
+                  manualMode={project.advanced.sceneNumbering.manualMode}
                   actBreak={storyState.sceneMeta[scene.blockId]?.actBreak}
                   status={storyState.sceneMeta[scene.blockId]?.status}
                   onNumberChange={(value) =>

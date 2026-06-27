@@ -2,6 +2,7 @@ import {
   parseSceneHeadingParts,
   sceneHeadingTimesOfDay,
 } from './sceneHeading'
+import type { BlockType } from '../types/screenplay'
 
 const normalize = (value: string): string =>
   value.trim().replace(/\s+/g, ' ').toUpperCase()
@@ -84,17 +85,13 @@ const sceneNumberPattern =
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-export const replaceSceneHeadingLocation = (
-  heading: string,
-  location: string,
-): string => {
+const sceneHeadingLocationBody = (heading: string): string => {
   const normalized = normalize(heading)
   const prefix = normalized.match(prefixPattern)?.[1] ?? ''
   const bodyWithScene = normalized.replace(prefixPattern, '').trim()
-  const sceneNumber = bodyWithScene.match(sceneNumberPattern)?.[1] ?? ''
   const body = bodyWithScene.replace(sceneNumberPattern, '').trim()
   const parsed = parseSceneHeadingParts(normalized)
-  const withoutTime = parsed.timeOfDay
+  return parsed.timeOfDay
     ? body
         .replace(
           new RegExp(
@@ -103,8 +100,72 @@ export const replaceSceneHeadingLocation = (
           '',
         )
         .trim()
-    : body
-  const locationParts = withoutTime
+    : body.replace(new RegExp(`^${escapeRegExp(prefix)}\\s+`), '').trim()
+}
+
+export const extractSceneHeadingLocationQuery = (heading: string): string => {
+  const withoutTime = sceneHeadingLocationBody(heading)
+  return normalize(
+    withoutTime
+      .split(/\s+-\s+/)[0]
+      ?.replace(/[.\s]+$/, '')
+      .trim() ?? '',
+  )
+}
+
+interface AutofillEnterSuggestion {
+  kind: 'character' | 'voice-cue' | 'location' | 'transition'
+  value: string
+}
+
+interface AutofillEnterContext {
+  characterSuggestions: readonly string[]
+  locations: readonly string[]
+}
+
+export const shouldApplyAutofillSuggestionOnEnter = (
+  block: { type: BlockType; text: string },
+  suggestion: AutofillEnterSuggestion,
+  context: AutofillEnterContext,
+): boolean => {
+  if (block.type === 'character' && suggestion.kind === 'character') {
+    const typed = normalize(block.text)
+    if (
+      typed === normalize(suggestion.value) ||
+      context.characterSuggestions.some((name) => normalize(name) === typed)
+    ) {
+      return false
+    }
+  }
+
+  if (block.type === 'scene-heading' && suggestion.kind === 'location') {
+    const typedLocation = extractSceneHeadingLocationQuery(block.text)
+    if (
+      typedLocation === normalize(suggestion.value) ||
+      context.locations.some((location) => normalize(location) === typedLocation)
+    ) {
+      return false
+    }
+
+    if (typedLocation && parseSceneHeadingParts(normalize(block.text)).timeOfDay) {
+      return false
+    }
+  }
+
+  return true
+}
+
+export const replaceSceneHeadingLocation = (
+  heading: string,
+  location: string,
+): string => {
+  const normalized = normalize(heading)
+  const prefix = normalized.match(prefixPattern)?.[1] ?? ''
+  const bodyWithScene = normalized.replace(prefixPattern, '').trim()
+  const sceneNumber = bodyWithScene.match(sceneNumberPattern)?.[1] ?? ''
+  const body = sceneHeadingLocationBody(normalized)
+  const parsed = parseSceneHeadingParts(normalized)
+  const locationParts = body
     .split(/\s+-\s+/)
     .map((part) => part.replace(/[.\s]+$/, '').trim())
     .filter(Boolean)
