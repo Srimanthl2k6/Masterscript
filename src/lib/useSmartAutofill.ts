@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react'
 import type { ScriptBlock } from '../types/screenplay'
 import type { CharacterVoiceCue } from './screenplay'
 import type { SmartTypeOptions } from './formattingEngine'
-import { rankSuggestions } from './smartAutofill'
+import {
+  extractSceneHeadingLocationQuery,
+  rankSuggestions,
+} from './smartAutofill'
 
 export interface AutofillSuggestion {
   id: string
@@ -57,10 +60,7 @@ export const useSmartAutofill = (
         }))
     }
     if (selectedBlock.type === 'scene-heading') {
-      const query = selectedBlock.text
-        .replace(/^(INT\.|EXT\.|INT\/EXT\.|EXT\/INT\.|I\/E\.|EST\.)\s*/i, '')
-        .split(/\s+(?:-|--|–|—|\.)\s+/)[0]
-        .trim()
+      const query = extractSceneHeadingLocationQuery(selectedBlock.text)
       if (!query) return []
       return rankSuggestions(query, smartTypeOptions.locations)
         .filter((location) => location.trim().toUpperCase() !== query.toUpperCase())

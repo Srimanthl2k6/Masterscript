@@ -426,6 +426,7 @@ export interface AdvancedState {
   }
   sceneNumbering: {
     locked: boolean
+    manualMode: boolean
     showNumbers: boolean
     numbers: Record<string, string>
   }

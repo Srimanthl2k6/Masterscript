@@ -6,6 +6,7 @@ interface SceneOutlineItemProps {
   active: boolean
   color?: string
   locked: boolean
+  manualMode: boolean
   actBreak?: string
   status?: string
   onNumberChange(value: string): void
@@ -18,6 +19,7 @@ export default function SceneOutlineItem({
   active,
   color,
   locked,
+  manualMode,
   actBreak,
   status,
   onNumberChange,
@@ -29,16 +31,22 @@ export default function SceneOutlineItem({
       style={{ borderLeftColor: color }}
     >
       <label className="scene-number-editor">
-        <span>Scene</span>
+        <span>{manualMode ? 'Manual Scene' : 'Scene'}</span>
         <input
           className="scene-number-input"
           value={numberLabel}
           disabled={locked}
-          aria-label={`Scene number for ${scene.heading}`}
+          aria-label={
+            manualMode
+              ? `Manual scene number for ${scene.heading}`
+              : `Scene suffix for ${scene.heading}`
+          }
           title={
             locked
               ? 'Scene numbers are locked for this production draft'
-              : 'Edit the alphabetic scene suffix'
+              : manualMode
+                ? 'Manual numbering: edit the full number and optional letter suffix'
+                : 'Edit the alphabetic scene suffix'
           }
           onChange={(event) => onNumberChange(event.target.value)}
         />
