@@ -1346,7 +1346,6 @@ button:focus-visible {
   pointer-events: none;
 }
 
-.script-block.scene-heading::before,
 .script-block.scene-heading::after {
   content: attr(data-scene-number);
   position: absolute;
@@ -1359,12 +1358,35 @@ button:focus-visible {
   pointer-events: none;
 }
 
-.script-block.scene-heading::before {
-  left: -0.5in;
-}
-
 .script-block.scene-heading::after {
   right: -0.48in;
+}
+
+.scene-number-inline-input {
+  position: absolute;
+  left: -0.58in;
+  top: 0.14in;
+  width: 0.48in;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: #f2f2f2;
+  padding: 0.02in 0.03in;
+  font: 700 12pt/1.17 'Courier Prime', 'Courier New', Courier, monospace;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.scene-number-inline-input:focus {
+  outline: none;
+  border-color: var(--border-strong);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.scene-number-inline-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.64;
 }
 
 .script-block.dragging {
@@ -1962,42 +1984,6 @@ kbd {
   gap: 0.28rem;
   text-align: left;
   color: #6f6f6f;
-}
-
-.scene-number-editor {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.scene-number-editor > span {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.scene-number-input {
-  width: 4.5rem;
-  min-width: 0;
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
-  color: inherit;
-  padding: 0.18rem 0.35rem;
-  font: 600 11px/1.2 'Courier Prime', 'Courier New', monospace;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.scene-number-input:focus {
-  outline: 1px solid var(--border-strong);
-  border-color: var(--border-strong);
-}
-
-.scene-number-input:disabled {
-  cursor: not-allowed;
-  opacity: 0.62;
 }
 
 .outline-scene-link {
@@ -3122,7 +3108,7 @@ kbd {
   color: #4f4f4f;
 }
 
-:root[data-theme='light'] .scene-number-input {
+:root[data-theme='light'] .scene-number-inline-input {
   background: rgba(0, 0, 0, 0.03);
   color: #111111;
 }

@@ -17,6 +17,7 @@ import FormattedPrintLineText from './components/FormattedPrintLineText'
 import WriterFormattingControls from './components/WriterFormattingControls'
 import ShortcutRemapPanel from './components/ShortcutRemapPanel'
 import AutofillSuggestions from './components/AutofillSuggestions'
+import SceneNumberInlineInput from './components/SceneNumberInlineInput'
 import WriterBlockActions from './components/WriterBlockActions'
 import SceneOutlineItem from './components/SceneOutlineItem'
 import { useCollaborationSession, type CollaborationStatus } from './lib/collaboration/useCollaborationSession'
@@ -63,7 +64,9 @@ import {
   rebuildCatalogFromScript,
 } from './lib/formattingEngine'
 import { replaceSceneHeadingLocation, shouldApplyAutofillSuggestionOnEnter } from './lib/smartAutofill'
+import { useAutofillSourceOptions } from './lib/autofillSource'
 import { useSmartAutofill, type AutofillSuggestion } from './lib/useSmartAutofill'
+import { useDismissAutofillOnOutsidePointerDown } from './lib/useDismissAutofillOnOutsidePointerDown'
 import { formatAtOffset, updateRangesForEdits, updateRangesForTextEdit } from './lib/richText'
 import { useTextFormatting } from './lib/useTextFormatting'
 import { useInstalledFonts } from './lib/useInstalledFonts'
@@ -956,6 +959,8 @@ function App({ initialInstallState = null }: AppProps) {
     () => project.blocks.find((block) => block.id === selectedBlockId) ?? null,
     [project.blocks, selectedBlockId],
   )
+  const { characterSuggestions: autofillCharacterSuggestions, smartTypeOptions: autofillSmartTypeOptions } =
+    useAutofillSourceOptions(project, selectedBlock?.id ?? null)
 
   const filteredScenes = useMemo(() => {
     const query = sceneFilterQuery.trim().toLowerCase()
@@ -1002,7 +1007,7 @@ function App({ initialInstallState = null }: AppProps) {
 
   const { suggestions: activeAutofillSuggestions, activeSuggestionIndex,
     setActiveSuggestionIndex, setDismissedSuggestionText } =
-    useSmartAutofill(selectedBlock, characterSuggestions, smartTypeOptions)
+    useSmartAutofill(selectedBlock, autofillCharacterSuggestions, autofillSmartTypeOptions)
 
   const snapshotOptions = useMemo<SnapshotOption[]>(
     () =>
@@ -1360,6 +1365,8 @@ function App({ initialInstallState = null }: AppProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const findInputRef = useRef<HTMLInputElement | null>(null)
   const fileMenuRef = useRef<HTMLDivElement | null>(null)
+  useDismissAutofillOnOutsidePointerDown({ activeBlockId, blocks: project.blocks, itemRefs,
+    onDismiss: setDismissedSuggestionText, suggestionCount: activeAutofillSuggestions.length })
   const keyboardActionsRef = useRef<{
     saveProject: () => Promise<void>
     openProject: () => Promise<void>
@@ -1981,11 +1988,6 @@ function App({ initialInstallState = null }: AppProps) {
     }, historyLabel)
   }
 
-  const updateSceneNumberingManualMode = (value: boolean) =>
-    commit((draft) => {
-      draft.advanced.sceneNumbering.manualMode = value
-    }, value ? 'Enabled manual scene numbering' : 'Enabled automatic scene numbering')
-
   const onContinuousDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     const value = event.target.value
     commit((draft) => {
@@ -2380,8 +2382,10 @@ function App({ initialInstallState = null }: AppProps) {
         if (
           target &&
           shouldApplyAutofillSuggestionOnEnter(target, suggestion, {
-            characterSuggestions,
-            locations: smartTypeOptions.locations,
+            characterSuggestions: autofillCharacterSuggestions,
+            exactCharacterSuggestions: autofillCharacterSuggestions,
+            locations: autofillSmartTypeOptions.locations,
+            exactLocations: autofillSmartTypeOptions.locations,
           })
         ) {
           event.preventDefault()
@@ -5587,6 +5591,19 @@ function App({ initialInstallState = null }: AppProps) {
                           onDragOver={(event) => event.preventDefault()}
                           onDrop={() => onBlockDrop(block.id)}
                         >
+                          {block.type === 'scene-heading' && (
+                            <SceneNumberInlineInput
+                              block={block}
+                              locked={project.advanced.sceneNumbering.locked}
+                              numberLabel={sceneNumberLabelById.get(block.id) ?? ''}
+                              onCommit={onSceneNumberChange}
+                              onDismissSuggestions={setDismissedSuggestionText}
+                              onFocusScene={(sceneId) => {
+                                setSelectedBlockId(sceneId)
+                                setSelectedSceneId(sceneId)
+                              }}
+                            />
+                          )}
                           <RichScriptBlockEditor
                             ref={(node) => {
                               textareaRefs.current[block.id] = node
@@ -5817,17 +5834,6 @@ function App({ initialInstallState = null }: AppProps) {
                       }
                     />
                     <span>Show scene numbers</span>
-                  </label>
-                  <label
-                    className="toggle-row compact"
-                    title="Manual numbering lets scene number edits reflow colliding labels instead of following scene order automatically."
-                  >
-                    <input
-                      type="checkbox"
-                      checked={project.advanced.sceneNumbering.manualMode}
-                      onChange={(event) => updateSceneNumberingManualMode(event.target.checked)}
-                    />
-                    <span>Manual scene numbering</span>
                   </label>
                 </div>
 
@@ -7234,13 +7240,8 @@ function App({ initialInstallState = null }: AppProps) {
                   numberLabel={sceneNumberLabelById.get(scene.blockId) ?? ''}
                   active={scene.blockId === resolvedSelectedSceneId}
                   color={storyState.sceneMeta[scene.blockId]?.color}
-                  locked={project.advanced.sceneNumbering.locked}
-                  manualMode={project.advanced.sceneNumbering.manualMode}
                   actBreak={storyState.sceneMeta[scene.blockId]?.actBreak}
                   status={storyState.sceneMeta[scene.blockId]?.status}
-                  onNumberChange={(value) =>
-                    onSceneNumberChange(scene.blockId, value)
-                  }
                   onSelect={() => {
                     setSelectedSceneId(scene.blockId)
                     if (activeTab === 'draft') {

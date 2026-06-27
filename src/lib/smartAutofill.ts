@@ -48,6 +48,52 @@ const suggestionScore = (query: string, candidate: string): number => {
   return 100 - distance * 10 - Math.abs(candidate.length - query.length)
 }
 
+const nearestPartialDistance = (query: string, candidate: string): number => {
+  const words = candidate.split(/\s+/)
+  return Math.min(
+    editDistance(query, candidate.slice(0, query.length)),
+    ...words.map((word) => editDistance(query, word.slice(0, query.length))),
+  )
+}
+
+export const isMeaningfulAutofillMatch = (
+  query: string,
+  candidate: string,
+): boolean => {
+  const normalizedQuery = normalize(query)
+  const normalizedCandidate = normalize(candidate)
+  if (
+    !normalizedQuery ||
+    !normalizedCandidate ||
+    normalizedQuery === normalizedCandidate
+  ) {
+    return false
+  }
+
+  if (normalizedCandidate.startsWith(normalizedQuery)) {
+    return true
+  }
+
+  if (
+    normalizedCandidate
+      .split(/\s+/)
+      .some((word) => word.startsWith(normalizedQuery))
+  ) {
+    return true
+  }
+
+  if (normalizedCandidate.includes(normalizedQuery)) {
+    return true
+  }
+
+  if (normalizedQuery.length < 3) {
+    return false
+  }
+
+  const allowedDistance = normalizedQuery.length >= 5 ? 2 : 1
+  return nearestPartialDistance(normalizedQuery, normalizedCandidate) <= allowedDistance
+}
+
 export const rankSuggestions = (
   query: string,
   candidates: readonly string[],
@@ -120,7 +166,9 @@ interface AutofillEnterSuggestion {
 
 interface AutofillEnterContext {
   characterSuggestions: readonly string[]
+  exactCharacterSuggestions?: readonly string[]
   locations: readonly string[]
+  exactLocations?: readonly string[]
 }
 
 export const shouldApplyAutofillSuggestionOnEnter = (
@@ -130,26 +178,29 @@ export const shouldApplyAutofillSuggestionOnEnter = (
 ): boolean => {
   if (block.type === 'character' && suggestion.kind === 'character') {
     const typed = normalize(block.text)
+    const exactCharacterSuggestions =
+      context.exactCharacterSuggestions ?? context.characterSuggestions
     if (
       typed === normalize(suggestion.value) ||
-      context.characterSuggestions.some((name) => normalize(name) === typed)
+      exactCharacterSuggestions.some((name) => normalize(name) === typed)
     ) {
       return false
     }
+
+    return isMeaningfulAutofillMatch(typed, suggestion.value)
   }
 
   if (block.type === 'scene-heading' && suggestion.kind === 'location') {
     const typedLocation = extractSceneHeadingLocationQuery(block.text)
+    const exactLocations = context.exactLocations ?? context.locations
     if (
       typedLocation === normalize(suggestion.value) ||
-      context.locations.some((location) => normalize(location) === typedLocation)
+      exactLocations.some((location) => normalize(location) === typedLocation)
     ) {
       return false
     }
 
-    if (typedLocation && parseSceneHeadingParts(normalize(block.text)).timeOfDay) {
-      return false
-    }
+    return isMeaningfulAutofillMatch(typedLocation, suggestion.value)
   }
 
   return true

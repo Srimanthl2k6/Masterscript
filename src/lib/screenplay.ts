@@ -155,7 +155,6 @@ export const createEmptyProject = (): ScriptProject => {
       },
       sceneNumbering: {
         locked: false,
-        manualMode: false,
         showNumbers: false,
         numbers: {},
       },

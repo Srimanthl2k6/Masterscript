@@ -303,7 +303,6 @@ const AdvancedWorkspace = ({
           <p className="small-copy">
             Scene numbers:{' '}
             {project.advanced.sceneNumbering.locked ? 'Locked' : 'Unlocked'} |
-            Mode: {project.advanced.sceneNumbering.manualMode ? 'Manual' : 'Auto'} |
             Fixed page mode: {project.advanced.fixedPageMode ? 'On' : 'Off'}
           </p>
         </section>

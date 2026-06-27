@@ -6,6 +6,11 @@ import { createBlock, createEmptyProject } from './screenplay'
 export const hydrateProject = (candidate: ScriptProject): ScriptProject => {
   validateProjectCandidate(candidate)
   const fallback = createEmptyProject()
+  const legacySceneNumbering = candidate.advanced?.sceneNumbering as
+    | (typeof fallback.advanced.sceneNumbering & { manualMode?: unknown })
+    | undefined
+  const candidateSceneNumbering = { ...(legacySceneNumbering ?? {}) }
+  delete candidateSceneNumbering.manualMode
   const hydrated = {
     ...fallback,
     ...candidate,
@@ -56,7 +61,7 @@ export const hydrateProject = (candidate: ScriptProject): ScriptProject => {
       },
       sceneNumbering: {
         ...fallback.advanced.sceneNumbering,
-        ...candidate.advanced?.sceneNumbering,
+        ...candidateSceneNumbering,
       },
       titlePage: {
         ...fallback.advanced.titlePage,

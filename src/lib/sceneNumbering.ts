@@ -8,23 +8,6 @@ export const sanitizeSceneNumberSuffix = (input: string): string =>
     .replace(/[^A-Z]/g, '')
     .slice(0, 6)
 
-const sceneNumberMap = (
-  project: ScriptProject,
-  overrides: Record<string, string> = {},
-): Record<string, string> =>
-  Object.fromEntries(
-    extractScenes(project).map((scene, index) => {
-      const current =
-        overrides[scene.blockId] ??
-        project.advanced.sceneNumbering.numbers[scene.blockId] ??
-        ''
-      return [
-        scene.blockId,
-        `${index + 1}${sanitizeSceneNumberSuffix(current)}`,
-      ]
-    }),
-  )
-
 interface ParsedSceneNumber {
   number: number
   suffix: string
@@ -44,16 +27,52 @@ const parseSceneNumberLabel = (
 const formatSceneNumberLabel = ({ number, suffix }: ParsedSceneNumber): string =>
   `${number}${suffix}`
 
-const manualSceneNumberMap = (
+const preservedSceneNumberMap = (
+  project: ScriptProject,
+): Record<string, string> => {
+  const scenes = extractScenes(project)
+  const usedNumbers = new Set<number>()
+  const numbers: Record<string, string> = {}
+
+  for (const [index, scene] of scenes.entries()) {
+    const current = project.advanced.sceneNumbering.numbers[scene.blockId]
+    if (!current) {
+      continue
+    }
+
+    const parsed = parseSceneNumberLabel(current, index + 1)
+    numbers[scene.blockId] = formatSceneNumberLabel(parsed)
+    usedNumbers.add(parsed.number)
+  }
+
+  let nextNumber = 1
+  for (const scene of scenes) {
+    if (numbers[scene.blockId]) {
+      continue
+    }
+
+    while (usedNumbers.has(nextNumber)) {
+      nextNumber += 1
+    }
+
+    numbers[scene.blockId] = String(nextNumber)
+    usedNumbers.add(nextNumber)
+  }
+
+  return numbers
+}
+
+const reflowSceneNumberMap = (
   project: ScriptProject,
   blockId: string,
   input: string,
 ): Record<string, string> => {
+  const normalizedNumbers = preservedSceneNumberMap(project)
   const scenes = extractScenes(project)
   const entries = scenes.map((scene, index) => ({
     blockId: scene.blockId,
     current: parseSceneNumberLabel(
-      project.advanced.sceneNumbering.numbers[scene.blockId] ?? String(index + 1),
+      normalizedNumbers[scene.blockId] ?? String(index + 1),
       index + 1,
     ),
   }))
@@ -109,14 +128,11 @@ const sameNumberMap = (
 export const reconcileSceneNumberLabels = (
   project: ScriptProject,
 ): ScriptProject => {
-  if (
-    project.advanced.sceneNumbering.locked ||
-    project.advanced.sceneNumbering.manualMode
-  ) {
+  if (project.advanced.sceneNumbering.locked) {
     return project
   }
 
-  const numbers = sceneNumberMap(project)
+  const numbers = preservedSceneNumberMap(project)
   if (sameNumberMap(numbers, project.advanced.sceneNumbering.numbers)) {
     return project
   }
@@ -140,9 +156,7 @@ export const updateSceneNumberLabel = (
     return project
   }
 
-  const numbers = project.advanced.sceneNumbering.manualMode
-    ? manualSceneNumberMap(project, blockId, input)
-    : sceneNumberMap(project, { [blockId]: input })
+  const numbers = reflowSceneNumberMap(project, blockId, input)
   if (sameNumberMap(numbers, project.advanced.sceneNumbering.numbers)) {
     return project
   }
