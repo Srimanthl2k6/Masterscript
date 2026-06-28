@@ -86,6 +86,8 @@ describe('workspace chrome UI', () => {
     )
     expect(appSource).toContain('focusFindMatch(match, { focusEditor: false })')
     expect(appSource).toContain('queueScroll(match.blockId)')
+    expect(appSource).toContain('scrollRequestVersion')
+    expect(appSource).toContain('setScrollRequestVersion')
     expect(appSource).toContain('activeFindMatch')
     expect(appSource).toContain('findMatchSelection={')
     expect(editorSource).toContain('findMatchSelection')

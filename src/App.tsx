@@ -789,6 +789,7 @@ function App({ initialInstallState = null }: AppProps) {
   const [findCaseSensitive, setFindCaseSensitive] = useState(false)
   const [findCursor, setFindCursor] = useState(0)
   const [activeFindMatch, setActiveFindMatch] = useState<(TextSelection & { blockId: string }) | null>(null)
+  const [scrollRequestVersion, setScrollRequestVersion] = useState(0)
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
@@ -1637,6 +1638,7 @@ function App({ initialInstallState = null }: AppProps) {
 
   const queueScroll = (id: string) => {
     pendingScrollId.current = id
+    setScrollRequestVersion((version) => version + 1)
     setHighlightedId(id)
   }
 
@@ -1900,6 +1902,7 @@ function App({ initialInstallState = null }: AppProps) {
     project.catalog,
     project.production.schedule,
     project.storyboards,
+    scrollRequestVersion,
   ])
 
   useEffect(() => {
