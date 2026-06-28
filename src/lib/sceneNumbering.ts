@@ -31,7 +31,6 @@ const preservedSceneNumberMap = (
   project: ScriptProject,
 ): Record<string, string> => {
   const scenes = extractScenes(project)
-  const usedNumbers = new Set<number>()
   const numbers: Record<string, string> = {}
 
   for (const [index, scene] of scenes.entries()) {
@@ -42,21 +41,53 @@ const preservedSceneNumberMap = (
 
     const parsed = parseSceneNumberLabel(current, index + 1)
     numbers[scene.blockId] = formatSceneNumberLabel(parsed)
-    usedNumbers.add(parsed.number)
   }
 
-  let nextNumber = 1
-  for (const scene of scenes) {
+  for (const [index, scene] of scenes.entries()) {
     if (numbers[scene.blockId]) {
       continue
     }
 
-    while (usedNumbers.has(nextNumber)) {
-      nextNumber += 1
+    const previousScene = scenes
+      .slice(0, index)
+      .findLast((candidate) => numbers[candidate.blockId])
+    const previousNumber = previousScene
+      ? parseSceneNumberLabel(numbers[previousScene.blockId], index).number
+      : 0
+    const insertedNumber = previousNumber + 1
+    const targetExistsAfter = scenes
+      .slice(index + 1)
+      .some((candidate, candidateIndex) => {
+        const label = numbers[candidate.blockId]
+        if (!label) {
+          return false
+        }
+        return (
+          parseSceneNumberLabel(label, index + candidateIndex + 2).number ===
+          insertedNumber
+        )
+      })
+
+    if (targetExistsAfter) {
+      for (const [candidateIndex, candidate] of scenes.entries()) {
+        if (candidateIndex <= index || !numbers[candidate.blockId]) {
+          continue
+        }
+
+        const parsed = parseSceneNumberLabel(
+          numbers[candidate.blockId],
+          candidateIndex + 1,
+        )
+        if (parsed.number >= insertedNumber) {
+          numbers[candidate.blockId] = formatSceneNumberLabel({
+            number: parsed.number + 1,
+            suffix: parsed.suffix,
+          })
+        }
+      }
     }
 
-    numbers[scene.blockId] = String(nextNumber)
-    usedNumbers.add(nextNumber)
+    numbers[scene.blockId] = String(insertedNumber)
   }
 
   return numbers

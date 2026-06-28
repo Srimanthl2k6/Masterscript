@@ -36,11 +36,53 @@ describe('editable scene numbering', () => {
 
     expect(reconciled.advanced.sceneNumbering.numbers).toEqual({
       [first.id]: '1',
-      [inserted.id]: '4',
-      [second.id]: '2A',
-      [third.id]: '3',
+      [inserted.id]: '2',
+      [second.id]: '3A',
+      [third.id]: '4',
     })
     expect(project.advanced.sceneNumbering.numbers[second.id]).toBe('2A')
+  })
+
+  it('numbers inserted scenes into their local slot and shifts affected later bases', () => {
+    const { blocks, project } = projectWithSceneNumbers([
+      '1',
+      '2A',
+      '3',
+      '2B',
+      '4',
+      '5',
+      '2C',
+      '6A',
+      '7',
+      '6B',
+      '8',
+      '9',
+      '6C',
+      '10',
+    ])
+    const originalBlocks = [...blocks]
+    const inserted = createBlock('scene-heading', 'INT. INSERTED - DAY')
+    project.blocks.splice(5, 0, inserted)
+
+    const reconciled = reconcileSceneNumberLabels(project)
+
+    expect(reconciled.advanced.sceneNumbering.numbers).toEqual({
+      [originalBlocks[0].id]: '1',
+      [originalBlocks[1].id]: '2A',
+      [originalBlocks[2].id]: '3',
+      [originalBlocks[3].id]: '2B',
+      [originalBlocks[4].id]: '4',
+      [inserted.id]: '5',
+      [originalBlocks[5].id]: '6',
+      [originalBlocks[6].id]: '2C',
+      [originalBlocks[7].id]: '7A',
+      [originalBlocks[8].id]: '8',
+      [originalBlocks[9].id]: '7B',
+      [originalBlocks[10].id]: '9',
+      [originalBlocks[11].id]: '10',
+      [originalBlocks[12].id]: '7C',
+      [originalBlocks[13].id]: '11',
+    })
   })
 
   it('updates a full scene number and normalizes invalid suffix input', () => {

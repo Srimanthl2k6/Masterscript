@@ -268,7 +268,7 @@ jobs:
             --arg baseUrl "$BASE_URL" \
             '{
               version: $version,
-              notes: "MasterScript 0.6.4 scrolls Find/Replace matches into view and highlights them without focusing the editor.",
+              notes: "MasterScript 0.6.5 numbers inserted scenes into their local slot while preserving alphanumeric cutback series.",
               pub_date: $pubDate,
               platforms: {
                 "windows-x86_64": {
@@ -381,7 +381,7 @@ jobs:
             --verify-tag \
             --draft \
             --title "MasterScript $TAG" \
-            --notes "MasterScript 0.6.4 scrolls Find/Replace matches into view and highlights them without focusing the editor."
+            --notes "MasterScript 0.6.5 numbers inserted scenes into their local slot while preserving alphanumeric cutback series."
 
       - name: Upload signed release assets
         env:
