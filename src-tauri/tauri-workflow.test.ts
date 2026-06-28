@@ -49,7 +49,7 @@ describe('Tauri release workflows', () => {
     expect(releaseWorkflow).toContain('MasterScript.linux.x86_64.AppImage')
     expect(releaseWorkflow).toContain('benchmark:tauri')
     expect(releaseWorkflow).not.toContain('electron-builder')
-    expect(releaseWorkflow).toContain('preserves alphanumeric scene numbers')
+    expect(releaseWorkflow).toContain('keeps Find/Replace matches visible')
     expect(releaseWorkflow.toLowerCase()).not.toContain('security hardening release')
   })
 

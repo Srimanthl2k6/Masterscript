@@ -71,6 +71,11 @@ describe('workspace chrome UI', () => {
   })
 
   it('keeps Find and Replace keyboard handling active while the panel is open', () => {
+    const editorSource = readFileSync(
+      'src/components/RichScriptBlockEditor.tsx',
+      'utf8',
+    )
+
     expect(appSource).toContain('handleFindPanelKeyDown(event')
     expect(appSource).toContain('findPanelActionsRef.current.findNext')
     expect(appSource).toContain(
@@ -81,6 +86,11 @@ describe('workspace chrome UI', () => {
     )
     expect(appSource).toContain('focusFindMatch(match, { focusEditor: false })')
     expect(appSource).toContain('queueScroll(match.blockId)')
+    expect(appSource).toContain('activeFindMatch')
+    expect(appSource).toContain('findMatchSelection={')
+    expect(editorSource).toContain('findMatchSelection')
+    expect(editorSource).toContain('className = \'find-match-highlight\'')
+    expect(stylesheet).toContain('.find-match-highlight')
   })
 
   it('replaces duplicate Writer hints with rich-text controls and a content-editable editor', () => {

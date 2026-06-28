@@ -1447,6 +1447,13 @@ button:focus-visible {
   outline: none;
 }
 
+.find-match-highlight {
+  border-radius: 2px;
+  background: rgba(245, 208, 97, 0.34);
+  box-shadow: 0 0 0 1px rgba(245, 208, 97, 0.22);
+  color: inherit;
+}
+
 .script-input.scene-heading {
   max-width: 100%;
   margin-left: 0;
