@@ -3,6 +3,10 @@ interface FindInputKeyEvent {
   preventDefault(): void
 }
 
+interface FindPanelKeyEvent extends FindInputKeyEvent {
+  stopPropagation(): void
+}
+
 export const handleFindInputKeyDown = (
   event: FindInputKeyEvent,
   findNext: () => void,
@@ -13,5 +17,26 @@ export const handleFindInputKeyDown = (
 
   event.preventDefault()
   findNext()
+  return true
+}
+
+export const handleFindPanelKeyDown = (
+  event: FindPanelKeyEvent,
+  findNext: () => void,
+  closePanel: () => void,
+): boolean => {
+  if (event.key !== 'Enter' && event.key !== 'Escape') {
+    return false
+  }
+
+  event.preventDefault()
+  event.stopPropagation()
+
+  if (event.key === 'Escape') {
+    closePanel()
+  } else {
+    findNext()
+  }
+
   return true
 }

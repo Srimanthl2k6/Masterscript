@@ -92,14 +92,8 @@ const reflowSceneNumberMap = (
       }
 
       let number = entry.current.number
-      if (targetNumber < oldNumber) {
-        if (number >= targetNumber && number < oldNumber) {
-          number += 1
-        }
-      } else if (targetNumber > oldNumber) {
-        if (number <= targetNumber && number > oldNumber) {
-          number -= 1
-        }
+      if (targetNumber !== oldNumber && number > oldNumber) {
+        number = Math.max(1, number - 1)
       }
 
       return [
