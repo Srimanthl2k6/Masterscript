@@ -126,7 +126,7 @@ import {
   setCharacterArcStage,
   upsertCharacterProfile,
 } from './lib/characterTools'
-import { handleFindInputKeyDown } from './lib/findReplace'
+import { handleFindPanelKeyDown } from './lib/findReplace'
 import {
   shouldOpenTutorialAutomatically,
   tutorialSteps,
@@ -1364,6 +1364,7 @@ function App({ initialInstallState = null }: AppProps) {
   const tutorialAutoStartedRef = useRef(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const findInputRef = useRef<HTMLInputElement | null>(null)
+  const findPanelActionsRef = useRef({ findNext: () => {}, close: () => {} })
   const fileMenuRef = useRef<HTMLDivElement | null>(null)
   useDismissAutofillOnOutsidePointerDown({ activeBlockId, blocks: project.blocks, itemRefs,
     onDismiss: setDismissedSuggestionText, suggestionCount: activeAutofillSuggestions.length })
@@ -1923,24 +1924,6 @@ function App({ initialInstallState = null }: AppProps) {
       findInputRef.current?.focus()
       findInputRef.current?.select()
     })
-  }, [isFindReplaceOpen])
-
-  useEffect(() => {
-    if (!isFindReplaceOpen) {
-      return
-    }
-
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        setIsFindReplaceOpen(false)
-      }
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-    }
   }, [isFindReplaceOpen])
 
   useEffect(() => {
@@ -3353,17 +3336,22 @@ function App({ initialInstallState = null }: AppProps) {
     setIsFindReplaceOpen(true)
   }
 
-  const closeFindReplace = () => {
-    setIsFindReplaceOpen(false)
-  }
+  const closeFindReplace = () => setIsFindReplaceOpen(false)
 
-  const focusFindMatch = (match: FindMatch) => {
+  const focusFindInput = () => window.requestAnimationFrame(() => findInputRef.current?.focus())
+
+  const focusFindMatch = (match: FindMatch, { focusEditor = true }: { focusEditor?: boolean } = {}) => {
     setActiveTab('draft')
     setSelectedBlockId(match.blockId)
     if (match.blockType === 'scene-heading') {
       setSelectedSceneId(match.blockId)
     }
-    queueFocus(match.blockId)
+    if (focusEditor) {
+      queueFocus(match.blockId)
+    } else {
+      queueScroll(match.blockId)
+      focusFindInput()
+    }
   }
 
   const jumpToNextFindMatch = () => {
@@ -3380,12 +3368,24 @@ function App({ initialInstallState = null }: AppProps) {
 
     const safeIndex = findCursor % findMatches.length
     const match = findMatches[safeIndex]
-    focusFindMatch(match)
+    focusFindMatch(match, { focusEditor: false })
     setFindCursor((safeIndex + 1) % findMatches.length)
     setStatusMessage(
       `Find match ${safeIndex + 1} of ${findMatches.length}: ${match.preview || match.matchText}`,
     )
   }
+  findPanelActionsRef.current = { findNext: jumpToNextFindMatch, close: closeFindReplace }
+
+  useEffect(() => {
+    if (!isFindReplaceOpen) {
+      return
+    }
+
+    const onKeyDown = (event: globalThis.KeyboardEvent) => handleFindPanelKeyDown(event, findPanelActionsRef.current.findNext, findPanelActionsRef.current.close)
+
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [isFindReplaceOpen])
 
   const replaceNextFindMatch = () => {
     const trimmedQuery = findQuery.trim()
@@ -3433,7 +3433,7 @@ function App({ initialInstallState = null }: AppProps) {
       return
     }
 
-    focusFindMatch(activeMatch)
+    focusFindMatch(activeMatch, { focusEditor: false })
     setFindCursor(0)
   }
 
@@ -6938,9 +6938,6 @@ function App({ initialInstallState = null }: AppProps) {
                       setFindQuery(event.target.value)
                       setFindCursor(0)
                     }}
-                    onKeyDown={(event) =>
-                      handleFindInputKeyDown(event, jumpToNextFindMatch)
-                    }
                     placeholder="Find text in screenplay"
                   />
                 </label>

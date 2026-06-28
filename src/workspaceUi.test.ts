@@ -70,8 +70,17 @@ describe('workspace chrome UI', () => {
     )
   })
 
-  it('runs Find Next from Enter in the Find input', () => {
-    expect(appSource).toContain('handleFindInputKeyDown(event, jumpToNextFindMatch)')
+  it('keeps Find and Replace keyboard handling active while the panel is open', () => {
+    expect(appSource).toContain('handleFindPanelKeyDown(event')
+    expect(appSource).toContain('findPanelActionsRef.current.findNext')
+    expect(appSource).toContain(
+      "window.addEventListener('keydown', onKeyDown, true)",
+    )
+    expect(appSource).toContain(
+      "window.removeEventListener('keydown', onKeyDown, true)",
+    )
+    expect(appSource).toContain('focusFindMatch(match, { focusEditor: false })')
+    expect(appSource).toContain('queueScroll(match.blockId)')
   })
 
   it('replaces duplicate Writer hints with rich-text controls and a content-editable editor', () => {

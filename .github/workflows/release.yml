@@ -268,7 +268,7 @@ jobs:
             --arg baseUrl "$BASE_URL" \
             '{
               version: $version,
-              notes: "MasterScript 0.6.1 restores partial autofill, keeps complete entries as typed, and moves full scene-number editing into the script editor.",
+              notes: "MasterScript 0.6.2 preserves alphanumeric scene numbers and keeps Find/Replace keyboard focus in the panel.",
               pub_date: $pubDate,
               platforms: {
                 "windows-x86_64": {
@@ -381,7 +381,7 @@ jobs:
             --verify-tag \
             --draft \
             --title "MasterScript $TAG" \
-            --notes "MasterScript 0.6.1 restores partial autofill, keeps complete entries as typed, and moves full scene-number editing into the script editor."
+            --notes "MasterScript 0.6.2 preserves alphanumeric scene numbers and keeps Find/Replace keyboard focus in the panel."
 
       - name: Upload signed release assets
         env:
