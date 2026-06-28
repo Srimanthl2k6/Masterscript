@@ -788,6 +788,7 @@ function App({ initialInstallState = null }: AppProps) {
   const [replaceQuery, setReplaceQuery] = useState('')
   const [findCaseSensitive, setFindCaseSensitive] = useState(false)
   const [findCursor, setFindCursor] = useState(0)
+  const [activeFindMatch, setActiveFindMatch] = useState<(TextSelection & { blockId: string }) | null>(null)
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
@@ -3332,22 +3333,22 @@ function App({ initialInstallState = null }: AppProps) {
     setActiveTab('draft')
     setIsCommandPaletteOpen(false)
     setCommandQuery('')
-    setFindCursor(0)
+    setFindCursor(0); setActiveFindMatch(null)
     setIsFindReplaceOpen(true)
   }
 
-  const closeFindReplace = () => setIsFindReplaceOpen(false)
+  const closeFindReplace = () => { setActiveFindMatch(null); setIsFindReplaceOpen(false) }
 
   const focusFindInput = () => window.requestAnimationFrame(() => findInputRef.current?.focus())
 
   const focusFindMatch = (match: FindMatch, { focusEditor = true }: { focusEditor?: boolean } = {}) => {
+    const selection = { start: match.index, end: match.index + match.matchText.length }
+    setActiveFindMatch({ blockId: match.blockId, ...selection })
     setActiveTab('draft')
     setSelectedBlockId(match.blockId)
-    if (match.blockType === 'scene-heading') {
-      setSelectedSceneId(match.blockId)
-    }
+    if (match.blockType === 'scene-heading') setSelectedSceneId(match.blockId)
     if (focusEditor) {
-      queueFocus(match.blockId)
+      queueFocus(match.blockId, selection)
     } else {
       queueScroll(match.blockId)
       focusFindInput()
@@ -3357,11 +3358,13 @@ function App({ initialInstallState = null }: AppProps) {
   const jumpToNextFindMatch = () => {
     const trimmedQuery = findQuery.trim()
     if (!trimmedQuery) {
+      setActiveFindMatch(null)
       setStatusMessage('Enter text in Find to search screenplay blocks')
       return
     }
 
     if (findMatches.length === 0) {
+      setActiveFindMatch(null)
       setStatusMessage('No matches found for current Find query')
       return
     }
@@ -3433,7 +3436,7 @@ function App({ initialInstallState = null }: AppProps) {
       return
     }
 
-    focusFindMatch(activeMatch, { focusEditor: false })
+    setActiveFindMatch(null)
     setFindCursor(0)
   }
 
@@ -3479,6 +3482,7 @@ function App({ initialInstallState = null }: AppProps) {
     }
 
     setFindCursor(0)
+    setActiveFindMatch(null)
     setStatusMessage(`Replaced ${replacedCount} match${replacedCount === 1 ? '' : 'es'}`)
   }
 
@@ -5612,6 +5616,7 @@ function App({ initialInstallState = null }: AppProps) {
                             className={`script-input ${block.type}${
                               activeBlockId === block.id ? ' selected' : ''
                             }`}
+                            findMatchSelection={activeFindMatch?.blockId === block.id ? activeFindMatch : null}
                             onFocus={() => {
                               setSelectedBlockId(block.id)
                               if (block.type === 'scene-heading') {
@@ -6934,10 +6939,7 @@ function App({ initialInstallState = null }: AppProps) {
                   <input
                     ref={findInputRef}
                     value={findQuery}
-                    onChange={(event) => {
-                      setFindQuery(event.target.value)
-                      setFindCursor(0)
-                    }}
+                    onChange={(event) => { setFindQuery(event.target.value); setFindCursor(0); setActiveFindMatch(null) }}
                     placeholder="Find text in screenplay"
                   />
                 </label>
@@ -6956,10 +6958,7 @@ function App({ initialInstallState = null }: AppProps) {
                   <input
                     type="checkbox"
                     checked={findCaseSensitive}
-                    onChange={(event) => {
-                      setFindCaseSensitive(event.target.checked)
-                      setFindCursor(0)
-                    }}
+                    onChange={(event) => { setFindCaseSensitive(event.target.checked); setFindCursor(0); setActiveFindMatch(null) }}
                   />
                   <span>Case sensitive</span>
                 </label>

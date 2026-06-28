@@ -29,6 +29,7 @@ export interface RichScriptBlockEditorHandle {
 interface RichScriptBlockEditorProps {
   block: ScriptBlock
   className: string
+  findMatchSelection?: TextSelection | null
   placeholder: string
   onChange: (text: string, selection: TextSelection) => void
   onBlur: () => void
@@ -125,6 +126,28 @@ const applyRunStyle = (element: HTMLSpanElement, format: TextFormat) => {
   }
 }
 
+const appendRunText = (
+  fragment: DocumentFragment,
+  text: string,
+  format: TextFormat,
+  isFindMatch = false,
+) => {
+  if (text.length === 0) {
+    return
+  }
+  if (!hasFormatting(format) && !isFindMatch) {
+    fragment.append(document.createTextNode(text))
+    return
+  }
+  const span = document.createElement('span')
+  span.textContent = text
+  if (isFindMatch) {
+    span.className = 'find-match-highlight'
+  }
+  applyRunStyle(span, format)
+  fragment.append(span)
+}
+
 const RichScriptBlockEditor = forwardRef<
   RichScriptBlockEditorHandle,
   RichScriptBlockEditorProps
@@ -132,6 +155,7 @@ const RichScriptBlockEditor = forwardRef<
   {
     block,
     className,
+    findMatchSelection = null,
     placeholder,
     onChange,
     onBlur,
@@ -152,18 +176,24 @@ const RichScriptBlockEditor = forwardRef<
   const renderSignature = useMemo(
     () =>
       JSON.stringify(
-        runs.map((run) => [
-          run.start,
-          run.end,
-          run.text,
-          run.format,
-        ]),
+        [
+          runs.map((run) => [
+            run.start,
+            run.end,
+            run.text,
+            run.format,
+          ]),
+          findMatchSelection,
+        ],
       ),
-    [runs],
+    [findMatchSelection, runs],
   )
   const renderHasFormatting = useMemo(
     () => runs.some((run) => hasFormatting(run.format)),
     [runs],
+  )
+  const renderHasFindMatch = Boolean(
+    findMatchSelection && findMatchSelection.end > findMatchSelection.start,
   )
 
   useLayoutEffect(() => {
@@ -182,6 +212,7 @@ const RichScriptBlockEditor = forwardRef<
     }
     if (
       textMatches &&
+      !renderHasFindMatch &&
       !renderHasFormatting &&
       !renderedWithFormattingRef.current
     ) {
@@ -195,24 +226,46 @@ const RichScriptBlockEditor = forwardRef<
         : null
     const fragment = document.createDocumentFragment()
     for (const run of runs) {
-      if (!hasFormatting(run.format)) {
-        fragment.append(document.createTextNode(run.text))
+      const matchStart = findMatchSelection?.start ?? -1
+      const matchEnd = findMatchSelection?.end ?? -1
+      const overlapStart = Math.max(run.start, matchStart)
+      const overlapEnd = Math.min(run.end, matchEnd)
+      if (overlapStart >= overlapEnd) {
+        appendRunText(fragment, run.text, run.format)
         continue
       }
-      const span = document.createElement('span')
-      span.textContent = run.text
-      applyRunStyle(span, run.format)
-      fragment.append(span)
+
+      const beforeLength = overlapStart - run.start
+      const matchLength = overlapEnd - overlapStart
+      appendRunText(fragment, run.text.slice(0, beforeLength), run.format)
+      appendRunText(
+        fragment,
+        run.text.slice(beforeLength, beforeLength + matchLength),
+        run.format,
+        true,
+      )
+      appendRunText(
+        fragment,
+        run.text.slice(beforeLength + matchLength),
+        run.format,
+      )
     }
     root.replaceChildren(fragment)
     renderedSignatureRef.current = renderSignature
-    renderedWithFormattingRef.current = renderHasFormatting
+    renderedWithFormattingRef.current = renderHasFormatting || renderHasFindMatch
     pendingSelectionRef.current = null
 
     if (selection && document.activeElement === root) {
       restoreSelection(root, selection.start, selection.end)
     }
-  }, [block.text, renderHasFormatting, renderSignature, runs])
+  }, [
+    block.text,
+    findMatchSelection,
+    renderHasFindMatch,
+    renderHasFormatting,
+    renderSignature,
+    runs,
+  ])
 
   const readSelection = (): TextSelection => {
     const root = rootRef.current
