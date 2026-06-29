@@ -74,6 +74,33 @@ describe('paginateProjectForPrint', () => {
     expect(sceneNumberLines[0].text).toBe('1')
   })
 
+  it('exports editable alphanumeric scene numbers when enabled', () => {
+    const project = createEmptyProject()
+    project.meta.includeTitlePage = false
+    project.meta.showSceneNumbers = true
+    const firstScene = createBlock('scene-heading', 'INT. STATION - NIGHT')
+    const secondScene = createBlock('scene-heading', 'EXT. ALLEY - NIGHT')
+    project.blocks = [
+      firstScene,
+      createBlock('action', 'A train glides in through mist and sparks.'),
+      secondScene,
+      createBlock('action', 'Rain needles the empty alley.'),
+    ]
+    project.advanced.sceneNumbering.numbers = {
+      [firstScene.id]: '1',
+      [secondScene.id]: '2A',
+    }
+
+    const layout = paginateProjectForPrint(project)
+    const sceneNumberText = layout.pages.flatMap((page) =>
+      page.lines
+        .filter((line) => line.role === 'scene-number')
+        .map((line) => line.text),
+    )
+
+    expect(sceneNumberText).toEqual(['1', '2A'])
+  })
+
   it('wraps long text and paginates across multiple script pages', () => {
     const project = createEmptyProject()
     project.meta.includeTitlePage = false

@@ -26,7 +26,7 @@ jobs:
             bundle: nsis
           - platform: macos
             os: macos-latest
-            bundle: dmg
+            bundle: app
           - platform: linux
             os: ubuntu-22.04
             bundle: deb
@@ -120,11 +120,10 @@ jobs:
           cp -R "$LEGACY_MOUNT/MasterScript.app" replacement/
           hdiutil detach "$LEGACY_MOUNT"
 
-          TAURI_MOUNT="$(mktemp -d)"
-          hdiutil attach src-tauri/target/release/bundle/dmg/*.dmg -mountpoint "$TAURI_MOUNT" -nobrowse
+          TAURI_APP="$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$TAURI_APP"
           rm -rf replacement/MasterScript.app
-          cp -R "$TAURI_MOUNT/MasterScript.app" replacement/
-          hdiutil detach "$TAURI_MOUNT"
+          cp -R "$TAURI_APP" replacement/
 
           test -f "$HOME/Library/Application Support/MasterScript/pass1-migration-sentinel.json"
           test -d replacement/MasterScript.app
