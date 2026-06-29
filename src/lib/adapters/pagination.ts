@@ -753,7 +753,8 @@ export const paginateProjectForPrint = (
         block.type === 'scene-heading' &&
         lineIndex === 0
       ) {
-        const sceneLabel = String(sceneCounter)
+        const sceneLabel =
+          project.advanced.sceneNumbering.numbers[block.id] ?? String(sceneCounter)
         pushLine(activePage, {
           text: sceneLabel,
           x: Math.max(
