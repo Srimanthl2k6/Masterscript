@@ -7,7 +7,7 @@ const hash = createHash('sha256').update(readFileSync(archive)).digest('hex')
 const filename = basename(archive)
 if (filename !== `MasterScript.linux.${version}.x86_64.pkg.tar.zst`) throw new Error('Unexpected Arch archive name')
 const url = `https://github.com/Srimanthl2k6/Masterscript/releases/download/v${version}/${filename}`
-const dependencies = ['webkit2gtk-4.1', 'gtk3', 'libayatana-appindicator', 'openssl', 'libxdo', 'gcc-libs', 'glibc']
+const dependencies = ['webkit2gtk-4.1', 'gtk3', 'libayatana-appindicator', 'openssl', 'gcc-libs', 'glibc']
 const pkgbuild = `# Generated from the verified release archive. Do not replace checksums with SKIP.
 pkgname=masterscript-bin
 pkgver=${version}

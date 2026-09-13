@@ -169,7 +169,6 @@ jobs:
           depend = gtk3
           depend = libayatana-appindicator
           depend = openssl
-          depend = libxdo
           depend = gcc-libs
           depend = glibc
           EOF

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ASSETS="$(realpath "$1")"
+pacman-key --init
+pacman-key --populate archlinux
 pacman -Syu --noconfirm
-pacman -S --needed --noconfirm webkit2gtk-4.1 gtk3 libayatana-appindicator openssl libxdo namcap desktop-file-utils
+pacman -S --needed --noconfirm webkit2gtk-4.1 gtk3 libayatana-appindicator openssl namcap desktop-file-utils
 useradd --create-home builder
 install -d -o builder -g builder /home/builder/package
 cp "$ASSETS/PKGBUILD" "$ASSETS/.SRCINFO" /home/builder/package/
