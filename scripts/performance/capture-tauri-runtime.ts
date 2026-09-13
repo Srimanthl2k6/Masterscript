@@ -1,5 +1,6 @@
-import { execFileSync, spawn } from 'node:child_process'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { WebSocket } from 'ws'
@@ -25,11 +26,17 @@ interface CdpResponse {
   error?: { message: string }
 }
 
-const waitForDebugTarget = async () => {
+const waitForDebugTarget = async (app: ChildProcess) => {
   const deadline = Date.now() + 30_000
+  let lastError = 'No page target returned'
   while (Date.now() < deadline) {
+    if (app.exitCode !== null || app.signalCode !== null) {
+      throw new Error(`Tauri exited before WebView2 was ready: ${app.exitCode ?? app.signalCode}`)
+    }
     try {
-      const response = await fetch(`http://127.0.0.1:${debuggingPort}/json/list`)
+      const response = await fetch(`http://127.0.0.1:${debuggingPort}/json/list`, {
+        signal: AbortSignal.timeout(2_000),
+      })
       const targets = (await response.json()) as Array<{
         type: string
         webSocketDebuggerUrl: string
@@ -38,12 +45,12 @@ const waitForDebugTarget = async () => {
       if (page) {
         return page.webSocketDebuggerUrl
       }
-    } catch {
-      // WebView2 has not opened its debugging endpoint yet.
+    } catch (error) {
+      lastError = String(error)
     }
     await delay(100)
   }
-  throw new Error('Tauri WebView2 debugging target did not become ready')
+  throw new Error(`Tauri WebView2 debugging target did not become ready: ${lastError}`)
 }
 
 const createCdpClient = async (url: string) => {
@@ -172,22 +179,29 @@ const measureInstalledFootprint = () => {
 }
 
 await mkdir(outputDirectory, { recursive: true })
+const profileDirectory = process.env.WEBVIEW2_USER_DATA_FOLDER ??
+  await mkdtemp(path.join(tmpdir(), 'masterscript-benchmark-'))
 const startedAt = Date.now()
 const app = spawn(executable, [], {
   cwd: root,
   env: {
     ...process.env,
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${debuggingPort}`,
+    WEBVIEW2_USER_DATA_FOLDER: profileDirectory,
   },
-  stdio: 'ignore',
+  stdio: ['ignore', 'pipe', 'pipe'],
   windowsHide: true,
 })
+let processLog = ''
+app.stdout?.on('data', (chunk) => { processLog += String(chunk) })
+app.stderr?.on('data', (chunk) => { processLog += String(chunk) })
+app.on('error', (error) => { processLog += String(error) })
 
 try {
   if (!app.pid) {
     throw new Error('Tauri process did not start')
   }
-  const webSocketUrl = await waitForDebugTarget()
+  const webSocketUrl = await waitForDebugTarget(app)
   const startupMs = Date.now() - startedAt
   const { socket, send } = await createCdpClient(webSocketUrl)
   await send('Runtime.enable')
@@ -305,4 +319,5 @@ try {
   }
 } finally {
   app.kill()
+  await writeFile(path.join(outputDirectory, 'tauri-process.log'), processLog, 'utf8')
 }
