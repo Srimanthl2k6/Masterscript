@@ -47,6 +47,7 @@ describe('Tauri release workflows', () => {
     expect(releaseWorkflow).toContain('MasterScript.Setup.exe')
     expect(releaseWorkflow).toContain('MasterScript.mac.universal.dmg')
     expect(releaseWorkflow).toContain('MasterScript.linux.x86_64.AppImage')
+    expect(releaseWorkflow).toContain('if [ -f signed-assets/.SRCINFO ]; then')
     expect(releaseWorkflow).toContain('benchmark:tauri')
     expect(releaseWorkflow).not.toContain('electron-builder')
     expect(releaseWorkflow).toContain('exports editable alphanumeric scene numbers')

@@ -388,7 +388,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-        run: gh release upload "$TAG" signed-assets/* --repo "$REPOSITORY"
+        run: |
+          assets=(signed-assets/*)
+          if [ -f signed-assets/.SRCINFO ]; then
+            assets+=(signed-assets/.SRCINFO)
+          fi
+          gh release upload "$TAG" "${assets[@]}" --repo "$REPOSITORY"
 
       - name: Verify required release artifacts
         env:
