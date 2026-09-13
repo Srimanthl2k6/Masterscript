@@ -45,6 +45,8 @@ describe('security governance', () => {
         .filter((line) => line.startsWith('uses: '))
 
       for (const use of actionUses) {
+        // Local reusable workflows are resolved at the calling commit itself.
+        if (/^uses: \.\/\.github\/workflows\/[\w-]+\.yml$/.test(use)) continue
         expect(use, file).toMatch(
           /^uses:\s+[^@\s]+@[0-9a-f]{40}(?:\s+#.*)?$/,
         )

@@ -116,7 +116,7 @@ describe('reports and analytics helpers', () => {
       dayNight: 'DAY',
       totalPages: 1,
     })
-    expect(props[0]).toMatchObject({
+    expect(props.find(row => row.item === 'silver revolver')).toMatchObject({
       item: 'silver revolver',
       scenes: ['INT. CAFE - DAY'],
     })
@@ -134,7 +134,7 @@ describe('reports and analytics helpers', () => {
     expect(summary).toMatchObject({
       sceneCount: 2,
       estimatedPages: 1,
-      taggedItems: 1,
+      taggedItems: 7,
     })
     expect(csv).toContain('Scene,Heading')
     expect(csv).toContain('1,INT. CAFE - DAY')

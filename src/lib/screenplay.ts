@@ -13,6 +13,9 @@ import {
   type StoryCard,
 } from '../types/screenplay'
 import { parseSceneHeadingParts } from './sceneHeading'
+import { normalizeCharacterName } from './characterNormalization'
+import { analyzeProjectScenes } from './sceneAnalysis'
+export { normalizeCharacterName } from './characterNormalization'
 
 const wordsPerPage = 250
 
@@ -479,14 +482,6 @@ const parseSceneLocation = (heading: string): string => {
 
 export type CharacterVoiceCue = 'V.O.' | 'O.S.'
 
-export const normalizeCharacterName = (value: string): string =>
-  value
-    .trim()
-    .replace(/\s*\([^)]*\)?\s*$/, '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toUpperCase()
-
 export const insertCharacterVoiceCue = (
   value: string,
   cue: CharacterVoiceCue,
@@ -542,38 +537,18 @@ export const generateProductionBreakdown = (
 ): BreakdownEntity[] => {
   const characterScenes = new Map<string, Set<string>>()
   const locationScenes = new Map<string, Set<string>>()
-  let activeSceneId: string | null = null
-
-  for (const block of project.blocks) {
-    if (block.type === 'scene-heading') {
-      activeSceneId = block.id
-      const location = parseSceneLocation(block.text)
-      if (location) {
-        if (!locationScenes.has(location)) {
-          locationScenes.set(location, new Set<string>())
-        }
-
-        locationScenes.get(location)?.add(block.id)
-      }
-      continue
+  for (const scene of analyzeProjectScenes(project)) {
+    for (const character of scene.cast) {
+      const ids = characterScenes.get(character) ?? new Set<string>()
+      ids.add(scene.sceneId)
+      characterScenes.set(character, ids)
     }
-
-    if (block.type === 'character') {
-      const name = normalizeCharacterName(block.text)
-      if (!name) {
-        continue
-      }
-
-      if (!characterScenes.has(name)) {
-        characterScenes.set(name, new Set<string>())
-      }
-
-      if (activeSceneId) {
-        characterScenes.get(name)?.add(activeSceneId)
-      }
+    if (scene.location && scene.pageCount > 0) {
+      const ids = locationScenes.get(scene.location) ?? new Set<string>()
+      ids.add(scene.sceneId)
+      locationScenes.set(scene.location, ids)
     }
   }
-
   const castEntries: BreakdownEntity[] = [...characterScenes.entries()].map(
     ([name, sceneIds]) => ({
       id: createId(),

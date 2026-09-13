@@ -1,0 +1,19 @@
+[package]
+name = "masterscript-tui"
+version = "0.7.0"
+edition = "2021"
+license = "UNLICENSED"
+description = "MasterScript terminal screenplay editor"
+
+[dependencies]
+crossterm = "0.29"
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+rquickjs = "0.12"
+serde_json = "1"
+tempfile = "3"
+unicode-width = "0.2"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

@@ -147,10 +147,22 @@ const syncBlocks = (blocksArray: Y.Array<BlockMap>, blocks: ScriptBlock[]) => {
     return
   }
 
-  blocksArray.delete(0, blocksArray.length)
-  const nextMaps = blocks.map(createBlockMap)
-  if (nextMaps.length > 0) {
-    blocksArray.insert(0, nextMaps)
+  const wanted = new Set(blocks.map(block => block.id))
+  for (let index = blocksArray.length - 1; index >= 0; index -= 1) {
+    if (!wanted.has(String(blocksArray.get(index).get('id')))) blocksArray.delete(index, 1)
+  }
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]
+    const current = index < blocksArray.length ? blocksArray.get(index) : null
+    if (current?.get('id') === block.id) {
+      updateBlockMap(current, block)
+    } else {
+      // Preserve unaffected Y.Text objects so concurrent edits remain anchored
+      // when Enter inserts a block. Only a genuine reorder recreates a moved map.
+      const movedIndex = blocksArray.toArray().findIndex(map => map.get('id') === block.id)
+      if (movedIndex >= 0) blocksArray.delete(movedIndex, 1)
+      blocksArray.insert(index, [createBlockMap(block)])
+    }
   }
 }
 

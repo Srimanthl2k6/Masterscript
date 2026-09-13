@@ -19,7 +19,7 @@ export const productionSecurityPolicy = [
 export default defineConfig({
   base: './',
   test: {
-    exclude: [...configDefaults.exclude, '.worktrees/**'],
+    exclude: [...configDefaults.exclude, '.worktrees/**', 'e2e/**'],
   },
   plugins: [
     react(),

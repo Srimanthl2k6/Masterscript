@@ -1,6 +1,8 @@
 import { Fragment, useMemo } from 'react'
+import { useAnalysisProject } from '../lib/useAnalysisProject'
 import {
   buildAnalyticsDashboard,
+  buildSceneReport,
 } from '../lib/reportsAnalytics'
 import { departmentTagCategories } from '../lib/taggingBreakdown'
 import type { DepartmentTagCategory, ScriptProject } from '../types/screenplay'
@@ -21,7 +23,7 @@ interface ReportsWorkspaceProps {
 }
 
 const ReportsWorkspace = ({
-  project,
+  project: currentProject,
   selectedReportView,
   selectedReportDepartment,
   setSelectedReportView,
@@ -29,6 +31,7 @@ const ReportsWorkspace = ({
   exportCurrentReportCsv,
   exportCurrentReportPdf,
 }: ReportsWorkspaceProps) => {
+  const project = useAnalysisProject(currentProject)
   const analyticsDashboard = useMemo(
     () => buildAnalyticsDashboard(project),
     [project],
@@ -45,6 +48,7 @@ const ReportsWorkspace = ({
         <h2>Reports and Analytics</h2>
         <div className="inline-actions">
           <select
+            aria-label="Report type"
             value={selectedReportView}
             onChange={(event) =>
               setSelectedReportView(event.target.value as ReportView)
@@ -60,6 +64,7 @@ const ReportsWorkspace = ({
           </select>
           {selectedReportView === 'department' && (
             <select
+              aria-label="Report department"
               value={selectedReportDepartment}
               onChange={(event) =>
                 setSelectedReportDepartment(
@@ -148,7 +153,15 @@ const ReportsWorkspace = ({
         </div>
       )}
 
-      <div className="report-table-wrap">
+      {selectedReportView === 'scene' ? <div className="tag-catalog-grid">
+        {buildSceneReport(project).map(scene => <article className="tagging-panel" key={scene.sceneId}>
+          <h3>{scene.sceneLabel}. {scene.heading}</h3>
+          <p className="small-copy">{scene.intExt} {scene.location} · {scene.dayNight} · {scene.pageCount} estimated page(s)</p>
+          <p><strong>Cast:</strong> {scene.castPresent.join(', ') || 'None identified'}</p>
+          {scene.nonSpeakingCast.length > 0 && <p><strong>Non-speaking:</strong> {scene.nonSpeakingCast.join(', ')}</p>}
+          {Object.entries(scene.requirements).filter(([category]) => !['Cast', 'Locations'].includes(category)).map(([category, items]) => <p key={category}><strong>{category}:</strong> {items.join(', ')}</p>)}
+        </article>)}
+      </div> : <div className="report-table-wrap">
         <h3>{currentReport.title}</h3>
         <div
           className="report-table"
@@ -172,7 +185,7 @@ const ReportsWorkspace = ({
             </Fragment>
           ))}
         </div>
-      </div>
+      </div>}
     </section>
   )
 }

@@ -62,13 +62,15 @@ export const buildCurrentReport = (
     case 'department':
       return {
         title: `${selectedReportDepartment} Report`,
-        headers: ['Category', 'Item', 'Scenes', 'Cost', 'Notes'],
+        headers: ['Category', 'Item', 'Scenes', 'Cost', 'Notes', 'Occurrences', 'Source'],
         rows: buildDepartmentReport(project, selectedReportDepartment).map((row) => [
           row.category,
           row.item,
           row.scenes,
           row.cost,
           row.notes,
+          row.occurrences,
+          row.source,
         ]),
       }
     case 'dialogue':
@@ -115,14 +117,17 @@ export const buildCurrentReport = (
     default:
       return {
         title: 'Scene Report',
-        headers: ['#', 'Heading', 'INT/EXT', 'Day/Night', 'Cast', 'Pages'],
+        headers: ['#', 'Heading', 'INT/EXT', 'Day/Night', 'Cast', 'Pages', 'Location', 'Non-speaking cast', 'Production requirements'],
         rows: buildSceneReport(project).map((row) => [
-          row.sceneNumber,
+          row.sceneLabel,
           row.heading,
           row.intExt,
           row.dayNight,
           row.castPresent,
           row.pageCount,
+          row.location,
+          row.nonSpeakingCast,
+          Object.entries(row.requirements).filter(([category]) => !['Cast', 'Locations'].includes(category)).map(([category, items]) => `${category}: ${items.join(', ')}`),
         ]),
       }
   }

@@ -3,8 +3,10 @@ import type {
   ScriptProject,
   TagCatalogItem,
   TaggedScriptRange,
+  TaggingState,
 } from '../types/screenplay'
 import { cloneProject, extractScenes } from './screenplay'
+import { analyzeProjectScenes, inferenceItemKey } from './sceneAnalysis'
 
 export const departmentTagCategories: DepartmentTagCategory[] = [
   'Cast',
@@ -99,10 +101,90 @@ const sceneHeadingById = (project: ScriptProject): Map<string, string> =>
 
 export const ensureTaggingState = (project: ScriptProject): ScriptProject => {
   const next = cloneProject(project)
-  next.tagging = {
-    tags: next.tagging?.tags ?? [],
-    catalog: next.tagging?.catalog ?? [],
+  next.tagging = structuredClone(resolveTagging(project))
+  return next
+}
+
+const resolvedCache = new WeakMap<ScriptProject, TaggingState>()
+/** Automatic rows are derived; only corrections/rejections have authority across runs. */
+export const resolveTagging = (project: ScriptProject): TaggingState => {
+  const cached = resolvedCache.get(project)
+  if (cached) return cached
+  const stored = project.tagging ?? { tags: [], catalog: [] }
+  const catalog = stored.catalog.filter(item => item.source !== 'automatic').map(item => ({ ...item }))
+  const tags = stored.tags.filter(tag => tag.source !== 'automatic').map(tag => ({ ...tag, sceneId: sceneIdForBlock(project, tag.blockId) }))
+  const rejectedItems = new Set(stored.rejectedItems ?? [])
+  const rejectedOccurrences = new Set(stored.rejectedOccurrences ?? [])
+  const catalogByKey = new Map(catalog.map(item => [item.inferenceKey ?? inferenceItemKey(item.category, item.name), item]))
+  const tagsByBlock = new Map<string, TaggedScriptRange[]>()
+  for (const tag of tags) tagsByBlock.set(tag.blockId, [...(tagsByBlock.get(tag.blockId) ?? []), tag])
+  for (const occurrence of analyzeProjectScenes(project).flatMap(scene => scene.occurrences)) {
+    if (rejectedItems.has(occurrence.itemKey) || rejectedOccurrences.has(occurrence.key)) continue
+    // Existing range tags, including a different user-selected category, win at that range.
+    if ((tagsByBlock.get(occurrence.blockId) ?? []).some(tag =>
+      ((tag.start < occurrence.end && tag.end > occurrence.start) || tag.inferenceKey === occurrence.key))) continue
+    let item = catalogByKey.get(occurrence.itemKey)
+    if (!item) {
+      item = { id: `auto:${occurrence.itemKey}`, category: occurrence.category, name: occurrence.name, cost: 0, notes: '', imageDataUrl: '', source: 'automatic', inferenceKey: occurrence.itemKey }
+      catalog.push(item)
+      catalogByKey.set(occurrence.itemKey, item)
+    }
+    const tag: TaggedScriptRange = { id: `auto:${occurrence.key}`, blockId: occurrence.blockId, sceneId: occurrence.sceneId, category: item.category, text: occurrence.name,
+      start: occurrence.start, end: occurrence.end, color: departmentTagColors[item.category], catalogItemId: item.id, source: 'automatic', inferenceKey: occurrence.key,
+      confidence: occurrence.confidence, evidence: occurrence.evidence, quantity: occurrence.quantity }
+    tags.push(tag)
+    tagsByBlock.set(tag.blockId, [...(tagsByBlock.get(tag.blockId) ?? []), tag])
   }
+  const result = { ...stored, catalog, tags }
+  resolvedCache.set(project, result)
+  return result
+}
+
+export const removeTagCatalogItem = (project: ScriptProject, itemId: string): ScriptProject => {
+  const next = ensureTaggingState(project)
+  const item = next.tagging.catalog.find(item => item.id === itemId)
+  if (!item) return next
+  const removed = next.tagging.tags.filter(tag => tag.catalogItemId === itemId)
+  const suppressed = analyzeProjectScenes(project).flatMap(scene => scene.occurrences).filter(occurrence => removed.some(tag => tag.blockId === occurrence.blockId && tag.start < occurrence.end && tag.end > occurrence.start)).map(occurrence => occurrence.key)
+  next.tagging.rejectedOccurrences = [...new Set([...(next.tagging.rejectedOccurrences ?? []), ...suppressed])]
+  next.tagging.rejectedItems = [...new Set([...(next.tagging.rejectedItems ?? []), item.inferenceKey ?? inferenceItemKey(item.category, item.name)])]
+  next.tagging.tags = next.tagging.tags.filter(tag => tag.catalogItemId !== itemId)
+  next.tagging.catalog = next.tagging.catalog.filter(item => item.id !== itemId)
+  return next
+}
+
+export const removeTagOccurrence = (project: ScriptProject, tagId: string): ScriptProject => {
+  const next = ensureTaggingState(project)
+  const tag = next.tagging.tags.find(tag => tag.id === tagId)
+  if (tag) {
+    const keys = analyzeProjectScenes(project).flatMap(scene => scene.occurrences).filter(occurrence => occurrence.blockId === tag.blockId && tag.start < occurrence.end && tag.end > occurrence.start).map(occurrence => occurrence.key)
+    next.tagging.rejectedOccurrences = [...new Set([...(next.tagging.rejectedOccurrences ?? []), ...keys, ...(tag.inferenceKey ? [tag.inferenceKey] : [])])]
+  }
+  next.tagging.tags = next.tagging.tags.filter(tag => tag.id !== tagId)
+  return next
+}
+
+export const addCatalogOccurrence = (project: ScriptProject, itemId: string, sceneId: string): ScriptProject => {
+  const next = ensureTaggingState(project)
+  const item = next.tagging.catalog.find(item => item.id === itemId)
+  if (!item || !next.blocks.some(block => block.id === sceneId && block.type === 'scene-heading')) return project
+  item.source = item.source === 'automatic' ? 'confirmed' : item.source
+  next.tagging.tags.push({ id: createId(), blockId: sceneId, sceneId, category: item.category, text: item.name, start: 0, end: 0, color: departmentTagColors[item.category], catalogItemId: itemId, source: 'manual' })
+  return next
+}
+
+export const createCatalogItem = (project: ScriptProject, category: DepartmentTagCategory, name: string, sceneId: string | null): ScriptProject => {
+  const next = ensureTaggingState(project)
+  const item = { id: createId(), category, name: name.trim(), cost: 0, notes: '', imageDataUrl: '', source: 'manual' as const }
+  if (!item.name) return project
+  next.tagging.catalog.push(item)
+  return sceneId ? addCatalogOccurrence(next, item.id, sceneId) : next
+}
+
+export const restoreAutomaticBreakdown = (project: ScriptProject): ScriptProject => {
+  const next = cloneProject(project)
+  next.tagging.rejectedItems = []
+  next.tagging.rejectedOccurrences = []
   return next
 }
 
@@ -121,7 +203,8 @@ export const tagScriptSelection = (
   project: ScriptProject,
   input: TagSelectionInput,
 ): ScriptProject => {
-  const next = ensureTaggingState(project)
+  const next = cloneProject(project)
+  next.tagging = { ...next.tagging, tags: next.tagging?.tags ?? [], catalog: next.tagging?.catalog ?? [] }
   const block = next.blocks.find((candidate) => candidate.id === input.blockId)
   if (!block) {
     return next
@@ -183,7 +266,7 @@ export const buildTagCatalog = (
 export const updateTagCatalogItem = (
   project: ScriptProject,
   itemId: string,
-  updates: Partial<Pick<TagCatalogItem, 'cost' | 'notes' | 'imageDataUrl' | 'name'>>,
+  updates: Partial<Pick<TagCatalogItem, 'cost' | 'notes' | 'imageDataUrl' | 'name' | 'category' | 'source'>>,
 ): ScriptProject => {
   const next = ensureTaggingState(project)
   const item = next.tagging.catalog.find((candidate) => candidate.id === itemId)
@@ -192,6 +275,13 @@ export const updateTagCatalogItem = (
   }
 
   Object.assign(item, updates)
+  item.source = updates.source ?? 'edited'
+  for (const tag of next.tagging.tags) {
+    if (tag.catalogItemId === itemId) {
+      tag.category = item.category
+      tag.color = departmentTagColors[item.category]
+    }
+  }
   if (typeof item.cost !== 'number' || Number.isNaN(item.cost)) {
     item.cost = 0
   }
@@ -221,6 +311,14 @@ export const buildBreakdownSheet = (
       categories[tag.category]?.push(sheetItem)
     }
     sheetItem.occurrences.push(tag)
+  }
+
+  if (sceneId === null) {
+    const assigned = new Set(hydrated.tagging.tags.map(tag => tag.catalogItemId))
+    for (const item of hydrated.tagging.catalog.filter(item => !assigned.has(item.id))) {
+      categories[item.category] ??= []
+      categories[item.category]!.push({ ...item, occurrences: [] })
+    }
   }
 
   return {
@@ -269,54 +367,8 @@ export const buildBreakdownCsv = (
     .join('\n')
 }
 
-const autoTagRules: Array<{
-  category: DepartmentTagCategory
-  pattern: RegExp
-}> = [
-  { category: 'Animals', pattern: /\b(dog|cat|horse|bird|snake)\b/gi },
-  { category: 'Vehicles', pattern: /\b(police car|taxi|truck|van|motorcycle|car)\b/gi },
-  { category: 'Props', pattern: /\b(revolver|gun|knife|letter|phone|key|watch)\b/gi },
-  { category: 'Wardrobe', pattern: /\b(coat|dress|uniform|hat|boots)\b/gi },
-  { category: 'Makeup', pattern: /\b(blood|scar|bruise|tattoo)\b/gi },
-  { category: 'VFX', pattern: /\b(hologram|portal|spaceship|creature)\b/gi },
-  { category: 'SFX', pattern: /\b(explosion|gunshot|crash|fire|smoke)\b/gi },
-  { category: 'Stunts', pattern: /\b(fight|fall|jump|chase|tackle)\b/gi },
-  { category: 'Music', pattern: /\b(song|music|radio|guitar|piano)\b/gi },
-  { category: 'Set Dressing', pattern: /\b(neon sign|poster|lamp|table|sofa)\b/gi },
-]
-
-export const autoTagScript = (project: ScriptProject): AutoTagSuggestion[] => {
-  const suggestions: AutoTagSuggestion[] = []
-  const seen = new Set<string>()
-
-  for (const block of project.blocks) {
-    if (!['action', 'scene-heading', 'dialogue'].includes(block.type)) {
-      continue
-    }
-
-    for (const rule of autoTagRules) {
-      const regex = new RegExp(rule.pattern)
-      let match = regex.exec(block.text)
-      while (match) {
-        const text = normalizeName(match[0] ?? '')
-        const signature = `${block.id}:${rule.category}:${match.index}:${text.toLowerCase()}`
-        if (text && !seen.has(signature)) {
-          seen.add(signature)
-          suggestions.push({
-            blockId: block.id,
-            sceneId: sceneIdForBlock(project, block.id),
-            category: rule.category,
-            text,
-            start: match.index,
-            end: match.index + text.length,
-            color: departmentTagColors[rule.category],
-          })
-        }
-
-        match = regex.exec(block.text)
-      }
-    }
-  }
-
-  return suggestions
-}
+export const autoTagScript = (project: ScriptProject): AutoTagSuggestion[] =>
+  resolveTagging(project).tags.filter(tag => tag.source === 'automatic').map(tag => ({
+    blockId: tag.blockId, sceneId: tag.sceneId, category: tag.category, text: tag.text,
+    start: tag.start, end: tag.end, color: tag.color,
+  }))

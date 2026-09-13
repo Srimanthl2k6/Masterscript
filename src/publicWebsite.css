@@ -1,0 +1,27 @@
+.public-landing, .public-downloads { color: #f3f3f3; background: #0a0a0a; font-family: Inter, sans-serif; }
+.public-landing { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; gap: 48px; }
+.public-identity { text-align: center; }
+.public-identity img { object-fit: contain; display: block; margin: 0 auto 24px; }
+.public-identity h1 { font-size: clamp(32px, 5vw, 48px); letter-spacing: -.05em; font-weight: 600; margin: 0; }
+.public-choices { display: flex; width: min(100%, 400px); gap: 12px; }
+.public-choices a { flex: 1; display: flex; justify-content: space-between; padding: 18px 22px; border: 1px solid #292929; border-radius: 8px; font-weight: 500; color: #f3f3f3; text-decoration: none; }
+.public-choices .public-primary { color: #0a0a0a; background: #f3f3f3; }
+.public-choices a:hover, .download-option:hover { border-color: #a0a0a0; transform: translateY(-1px); }
+.public-landing a:focus-visible, .public-downloads a:focus-visible { outline: 2px solid #f3f3f3; outline-offset: 5px; }
+.public-downloads { min-height: 100dvh; padding: 32px max(24px, calc((100vw - 1000px) / 2)); }
+.public-downloads a { color: inherit; }
+.public-downloads header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 64px; }
+.public-wordmark { display: flex; align-items: center; gap: 12px; text-decoration: none; font-weight: 600; }
+.public-downloads h1 { font-size: clamp(32px, 5vw, 56px); letter-spacing: -.045em; line-height: 1.1; margin-bottom: 20px; }
+.public-downloads h1 span, .public-downloads > p, .download-option p, .public-downloads footer p { color: #a0a0a0; }
+.download-platform { margin: 48px 0; }
+.download-platform h2 { font-size: 18px; margin-bottom: 16px; }
+.download-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.download-option { display: block; border: 1px solid #292929; border-radius: 12px; padding: 24px; text-decoration: none; background: #171717; transition: border-color .15s, transform .15s; }
+.download-option strong { display: inline-block; font-size: 15px; margin: 0 8px 8px 0; }
+.download-recommended { display: inline-block; font-size: 11px; background: #f3f3f3; color: #0a0a0a; padding: 3px 7px; border-radius: 4px; }
+.download-format { display: flex; justify-content: space-between; font-family: 'Courier Prime', monospace; }
+.download-option p { font-size: 13px; line-height: 1.6; margin-bottom: 0; }
+.public-downloads footer { padding: 32px 0; border-top: 1px solid #292929; font-size: 13px; }
+.public-loading { padding: 48px; }
+@media (max-width: 640px) { .download-options { grid-template-columns: 1fr; } .public-downloads header { margin-bottom: 48px; } .public-identity img { width: 180px; height: 180px; } }

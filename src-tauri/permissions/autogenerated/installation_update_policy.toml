@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-installation-update-policy"
+description = "Enables the installation_update_policy command without any pre-configured scope."
+commands.allow = ["installation_update_policy"]
+
+[[permission]]
+identifier = "deny-installation-update-policy"
+description = "Denies the installation_update_policy command without any pre-configured scope."
+commands.deny = ["installation_update_policy"]

@@ -301,7 +301,7 @@ export const parseSlugLine = (input: string) => {
 
   return {
     intExt: parsed.intExt,
-    location: parsed.location || locationParts[0]?.replace(/[.\s]+$/, '') || '',
+    location: parsed.location.split(/\s+-\s+/)[0] || locationParts[0]?.replace(/[.\s]+$/, '') || '',
     subLocation: locationParts.slice(1).join(' - ').replace(/[.\s]+$/, ''),
     timeOfDay: parsed.timeOfDay,
     normalized,

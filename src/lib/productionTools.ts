@@ -1,6 +1,5 @@
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import type {
-  BreakdownEntity,
   ScheduleEntry,
   ScriptBlock,
   ScriptProject,
@@ -9,6 +8,7 @@ import type {
 } from '../types/screenplay'
 import { cloneProject, extractScenes } from './screenplay'
 import { parseSceneHeadingParts } from './sceneHeading'
+import { buildSceneReport } from './reportsAnalytics'
 
 export interface StripboardStrip {
   id: string
@@ -135,18 +135,17 @@ const sceneMaps = (project: ScriptProject) => {
 }
 
 const castForScene = (
-  breakdown: BreakdownEntity[],
+  project: ScriptProject,
   sceneId: string | null,
 ): string[] => {
   if (!sceneId) {
     return []
   }
 
-  return breakdown
-    .filter((entry) => entry.kind === 'cast' && entry.sceneIds.includes(sceneId))
-    .map((entry) => entry.name)
-    .filter(Boolean)
-    .sort((left, right) => left.localeCompare(right))
+  return [...new Set([
+    ...(buildSceneReport(project).find(scene => scene.sceneId === sceneId)?.castPresent ?? []),
+    ...project.production.breakdown.filter(entry => entry.kind === 'cast' && entry.sceneIds.includes(sceneId)).map(entry => entry.name),
+  ])].sort((left, right) => left.localeCompare(right))
 }
 
 const scheduleForDay = (
@@ -172,7 +171,7 @@ export const buildStripboard = (project: ScriptProject): StripboardStrip[] => {
       intExt: parts.intExt,
       dayNight: parts.dayNight,
       location: entry.location || parts.location,
-      cast: castForScene(project.production.breakdown, entry.sceneId),
+      cast: castForScene(project, entry.sceneId),
       notes: entry.notes,
       color: entry.stripColor || stripColorForHeading(heading),
     }
@@ -201,9 +200,15 @@ export const buildDoodGrid = (project: ScriptProject): DoodGrid => {
     .filter((day) => day > 0)
     .sort((left, right) => left - right)
 
-  const cast = project.production.breakdown
-    .filter((entry) => entry.kind === 'cast')
-    .sort((left, right) => left.name.localeCompare(right.name))
+  const sceneCast = new Map<string, Set<string>>()
+  for (const scene of extractScenes(project)) {
+    for (const name of castForScene(project, scene.blockId)) {
+      const sceneIds = sceneCast.get(name) ?? new Set<string>()
+      sceneIds.add(scene.blockId)
+      sceneCast.set(name, sceneIds)
+    }
+  }
+  const cast = [...sceneCast].map(([name, sceneIds]) => ({ name, sceneIds: [...sceneIds] })).sort((a, b) => a.name.localeCompare(b.name))
 
   const rows = cast.map((entry) => {
     const appearanceDays = new Set(
@@ -284,7 +289,7 @@ export const buildCallSheet = (project: ScriptProject, day: number): CallSheet =
       heading,
       location: entry.location || parts.location,
       notes: entry.notes,
-      cast: castForScene(project.production.breakdown, entry.sceneId),
+      cast: castForScene(project, entry.sceneId),
     }
   })
 

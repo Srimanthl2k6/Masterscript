@@ -49,7 +49,9 @@ describe('Tauri release workflows', () => {
     expect(releaseWorkflow).toContain('MasterScript.linux.x86_64.AppImage')
     expect(releaseWorkflow).toContain('benchmark:tauri')
     expect(releaseWorkflow).not.toContain('electron-builder')
-    expect(releaseWorkflow).toContain('exports editable alphanumeric scene numbers')
+    expect(releaseWorkflow).toContain('verify-assets.mjs signed-assets')
+    expect(releaseWorkflow).toContain('generate-aur.mjs')
+    expect(releaseWorkflow).toContain('npm run build:tui')
     expect(releaseWorkflow.toLowerCase()).not.toContain('security hardening release')
   })
 
@@ -69,6 +71,7 @@ describe('Tauri release workflows', () => {
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter((line) => line.startsWith('uses: '))
+        .filter((line) => !line.startsWith('uses: ./'))
 
       expect(actionUses.length).toBeGreaterThan(0)
       for (const use of actionUses) {

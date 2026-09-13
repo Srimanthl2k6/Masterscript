@@ -24,5 +24,12 @@ dist-ssr
 *.sln
 *.sw?
 
-release/
+/release/
 src-tauri/target/
+tui/target/
+tui/generated/
+tui/dist/
+src-tauri/tauri.release.conf.json
+.superdesign/
+test-results/
+src-tauri/gen/

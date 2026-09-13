@@ -1,0 +1,67 @@
+name: Publish AUR package
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published stable release tag
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  publish-aur:
+    runs-on: ubuntu-latest
+    environment: aur-publishing
+    steps:
+      - name: Check publication credentials
+        id: credentials
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_KNOWN_HOSTS: ${{ secrets.AUR_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ] || [ -z "$AUR_KNOWN_HOSTS" ]; then
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo 'AUR publication skipped: configure AUR_SSH_PRIVATE_KEY and pinned AUR_KNOWN_HOSTS in aur-publishing.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Download verified release metadata
+        if: steps.credentials.outputs.available == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(gh release view "$TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft)" = false
+          gh release download "$TAG" --repo "$REPOSITORY" --dir metadata --pattern PKGBUILD --pattern .SRCINFO --pattern release-checksums.sha256
+          cd metadata
+          grep -E ' (\*|\./)?(PKGBUILD|\.SRCINFO)$' release-checksums.sha256 | sha256sum --check --strict
+      - name: Publish masterscript-bin
+        if: steps.credentials.outputs.available == 'true'
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_KNOWN_HOSTS: ${{ secrets.AUR_KNOWN_HOSTS }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
+        run: |
+          install -d -m700 ~/.ssh
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$AUR_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          git clone ssh://aur@aur.archlinux.org/masterscript-bin.git aur
+          cp metadata/PKGBUILD metadata/.SRCINFO aur/
+          cd aur
+          git config user.name 'MasterScript Releases'
+          git config user.email 'masterscript@users.noreply.github.com'
+          git add PKGBUILD .SRCINFO
+          if ! git diff --cached --quiet; then
+            git commit -m "Update masterscript-bin to $TAG"
+            git push origin HEAD:master
+          fi

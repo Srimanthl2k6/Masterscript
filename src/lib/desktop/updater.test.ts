@@ -10,7 +10,7 @@ describe('Tauri updater integration', () => {
 
     expect(source).toContain("desktopBridge.runtime !== 'tauri'")
     expect(source).toContain("import('@tauri-apps/plugin-updater')")
-    expect(source).toContain('downloadAndInstall')
+    expect(source).toContain('createUpdateController')
     expect(source).toContain("import('@tauri-apps/plugin-process')")
   })
 })

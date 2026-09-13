@@ -1,11 +1,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.tsx'
+import PublicWebsite from './PublicWebsite'
 import { initializeDesktopRuntime } from './lib/desktop/desktopBootstrap'
 import { desktopBridge } from './lib/desktop/desktopBridge'
 import type { InstallState } from './lib/desktop/types'
-import { checkForDesktopUpdate } from './lib/desktop/updater'
 
 let initialInstallState: InstallState | null = null
 try {
@@ -18,10 +17,6 @@ try {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App initialInstallState={initialInstallState} />
+    <PublicWebsite initialInstallState={initialInstallState} />
   </StrictMode>,
 )
-
-window.setTimeout(() => {
-  void checkForDesktopUpdate()
-}, 2500)

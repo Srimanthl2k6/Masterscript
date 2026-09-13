@@ -51,7 +51,7 @@ export const hydrateProject = (candidate: ScriptProject): ScriptProject => {
     story: candidate.story ?? fallback.story,
     characters: candidate.characters ?? fallback.characters,
     productivity: candidate.productivity ?? fallback.productivity,
-    tagging: candidate.tagging ?? fallback.tagging,
+    tagging: { ...fallback.tagging, ...candidate.tagging },
     advanced: {
       ...fallback.advanced,
       ...candidate.advanced,
