@@ -7,6 +7,7 @@ import {
 import { extractScenes } from '../lib/screenplay'
 import { clearSceneAnalysisCache } from '../lib/sceneAnalysis'
 import type { DepartmentTagCategory, ScriptProject } from '../types/screenplay'
+import './breakdownWorkspace.css'
 
 interface BreakdownWorkspaceProps {
   project: ScriptProject
@@ -32,7 +33,7 @@ const BreakdownWorkspace = ({ project, selectedSceneId, onProjectChange, onScene
   const tagging = useMemo(() => resolveTagging(project), [project])
   const change = (next: ScriptProject, status = 'Updated breakdown') => onProjectChange(next, status)
   return (
-    <section className="module-layout module-surface tab-enter">
+    <section className="module-layout module-surface breakdown-workspace tab-enter">
       <div className="module-heading">
         <h2>Scene Breakdown</h2>
         <div className="inline-actions">

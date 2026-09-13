@@ -80,6 +80,11 @@ test('automatic breakdown edits, rejections and report exports share the saved p
   await monitor.getByRole('button', { name: 'Reject', exact: true }).click()
   await page.getByRole('button', { name: 'Reanalyse', exact: true }).click()
   await expect(monitor).toHaveCount(0)
+  const overflowingFields = await page.locator('.tag-catalog-item').evaluateAll(items => items.flatMap(item => {
+    const card = item.getBoundingClientRect()
+    return [...item.querySelectorAll('input, select')].filter(field => field.getBoundingClientRect().right > card.right + 1)
+  }).length)
+  expect(overflowingFields).toBe(0)
   await page.screenshot({ path: 'test-results/breakdown.png', fullPage: true })
   await page.getByRole('button', { name: 'Reports', exact: true }).click()
   await expect(page.getByText('Ravi bag', { exact: false }).first()).toBeVisible()
