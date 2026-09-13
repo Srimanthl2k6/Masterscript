@@ -144,6 +144,8 @@ jobs:
           install -m755 tui/dist/masterscript-tui "$PACKAGE_ROOT/usr/bin/masterscript-tui"
           install -Dm644 src-tauri/icons/128x128.png \
             "$PACKAGE_ROOT/usr/share/icons/hicolor/128x128/apps/masterscript.png"
+          install -Dm644 packaging/aur/LICENSE \
+            "$PACKAGE_ROOT/usr/share/licenses/masterscript/LICENSE"
           cat > "$PACKAGE_ROOT/usr/share/applications/masterscript.desktop" <<EOF
           [Desktop Entry]
           Name=MasterScript
@@ -164,14 +166,8 @@ jobs:
           packager = MasterScript
           size = $(du -sb "$PACKAGE_ROOT/usr" | cut -f1)
           arch = x86_64
-          license = custom
-          depend = webkit2gtk-4.1
-          depend = gtk3
-          depend = libayatana-appindicator
-          depend = openssl
-          depend = gcc-libs
-          depend = glibc
           EOF
+          node -e 'const m = require("./scripts/release/arch-metadata.json"); console.log("license = " + m.license); for (const d of m.dependencies) console.log("depend = " + d)' >> "$PACKAGE_ROOT/.PKGINFO"
           tar --zstd -cf "release-assets/MasterScript.linux.$VERSION.x86_64.pkg.tar.zst" \
             -C "$PACKAGE_ROOT" .PKGINFO usr
           APPIMAGE="$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -print -quit)"

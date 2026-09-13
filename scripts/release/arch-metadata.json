@@ -1,0 +1,4 @@
+{
+  "license": "LicenseRef-UNLICENSED",
+  "dependencies": ["webkit2gtk-4.1", "gtk3", "dbus", "glib2", "libsoup3", "libgcc", "glibc", "cairo", "wayland", "gdk-pixbuf2", "hicolor-icon-theme"]
+}
