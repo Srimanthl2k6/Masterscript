@@ -25,8 +25,16 @@ interface CdpResponse {
   error?: { message: string }
 }
 
+const parsedDebugTargetTimeoutMs = Number(
+  process.env.TAURI_DEBUG_TARGET_TIMEOUT_MS ?? '90000',
+)
+const debugTargetTimeoutMs =
+  Number.isFinite(parsedDebugTargetTimeoutMs) && parsedDebugTargetTimeoutMs > 0
+    ? parsedDebugTargetTimeoutMs
+    : 90_000
+
 const waitForDebugTarget = async () => {
-  const deadline = Date.now() + 30_000
+  const deadline = Date.now() + debugTargetTimeoutMs
   while (Date.now() < deadline) {
     try {
       const response = await fetch(`http://127.0.0.1:${debuggingPort}/json/list`)

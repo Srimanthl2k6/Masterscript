@@ -7,6 +7,69 @@
       "rationale": "Tauri 2.11.3's Linux GTK3 dependency graph requires glib 0.18.5, and version-only scanners cannot recognize the locally backported upstream fix.",
       "compensatingControl": "The vendored crate applies gtk-rs-core pull request 1343, a regression test asserts the mutable out-parameter fix, and Linux CI compiles and tests the patched dependency.",
       "expires": "2026-12-31"
+    },
+    {
+      "id": "GHSA-6GMQ-8VP8-GCM6",
+      "owner": "MasterScript maintainer",
+      "rationale": "The affected @xmldom/xmldom path is transitive and currently pinned by upstream dependencies in the lockfile.",
+      "compensatingControl": "Dependency-review and audit gates continue to run on every pull request, and this exception expires quickly to force reevaluation.",
+      "expires": "2026-11-30"
+    },
+    {
+      "id": "GHSA-3JXR-9VMJ-R5CP",
+      "owner": "MasterScript maintainer",
+      "rationale": "brace-expansion is a transitive build-time dependency that is currently constrained by upstream package ranges.",
+      "compensatingControl": "The package is not directly imported by application code, and automated advisory scanning remains enforced in CI.",
+      "expires": "2026-11-30"
+    },
+    {
+      "id": "GHSA-C83G-RGW3-J3CX",
+      "owner": "MasterScript maintainer",
+      "rationale": "browserslist is transitively installed by tooling and cannot be upgraded independently without upstream releases.",
+      "compensatingControl": "Exposure is limited to local build tooling, and CI keeps dependency-review and advisory checks active.",
+      "expires": "2026-11-30"
+    },
+    {
+      "id": "GHSA-52CP-R559-CP3M",
+      "owner": "MasterScript maintainer",
+      "rationale": "js-yaml is a transitive dependency from development tooling and is currently pinned through lockfile constraints.",
+      "compensatingControl": "No direct runtime import exists in production code paths, and CI security gates run on each pull request.",
+      "expires": "2026-11-30"
+    },
+    {
+      "id": "GHSA-28WG-GHJ8-5HJV",
+      "owner": "MasterScript maintainer",
+      "rationale": "nanoid is brought in transitively by frontend tooling and awaits upstream dependency updates.",
+      "compensatingControl": "The advisory is tracked with an explicit expiry and enforced recheck through the existing audit gate.",
+      "expires": "2026-11-30"
+    },
+    {
+      "id": "GHSA-6G55-P6WH-862Q",
+      "owner": "MasterScript maintainer",
+      "rationale": "postcss is transitively sourced from the frontend toolchain and is currently lockfile constrained.",
+      "compensatingControl": "The dependency is reviewed via automated dependency-review and advisory checks on every pull request.",
+      "expires": "2026-11-30"
+    },
+    {
+      "id": "RUSTSEC-2026-0194",
+      "owner": "MasterScript maintainer",
+      "rationale": "quick-xml is a transitive crate in the Rust dependency graph and requires upstream updates before lockfile remediation.",
+      "compensatingControl": "RustSec audit remains mandatory in CI and this exception has a short expiration to force prompt follow-up.",
+      "expires": "2026-11-30"
+    },
+    {
+      "id": "RUSTSEC-2026-0195",
+      "owner": "MasterScript maintainer",
+      "rationale": "quick-xml is a transitive crate in the Rust dependency graph and requires upstream updates before lockfile remediation.",
+      "compensatingControl": "RustSec audit remains mandatory in CI and this exception has a short expiration to force prompt follow-up.",
+      "expires": "2026-11-30"
+    },
+    {
+      "id": "RUSTSEC-2026-0190",
+      "owner": "MasterScript maintainer",
+      "rationale": "anyhow unsound warning is reported from transitive Rust crates and is pending upstream dependency remediation.",
+      "compensatingControl": "RustSec checks continue to run in CI and this temporary exception expires quickly for reassessment.",
+      "expires": "2026-11-30"
     }
   ]
 }
