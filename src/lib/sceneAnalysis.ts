@@ -66,7 +66,7 @@ const characterIndex = (project: ScriptProject): NameIndex => {
   const index: NameIndex = characterAliasIndex(project)
   const add = (name: string, canonical = name) => {
     const normalized = normalizeCharacterName(name)
-    if (normalized) index.set(normalized, normalizeCharacterName(canonical))
+    if (normalized && !index.has(normalized)) index.set(normalized, normalizeCharacterName(canonical))
   }
   for (const entry of project.catalog ?? []) if (entry.kind === 'character') add(entry.name)
   for (const entry of project.production?.breakdown ?? []) if (entry.kind === 'cast') add(entry.name)

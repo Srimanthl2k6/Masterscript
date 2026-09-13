@@ -9,6 +9,7 @@ import type {
 import { cloneProject, extractScenes } from './screenplay'
 import { parseSceneHeadingParts } from './sceneHeading'
 import { buildSceneReport } from './reportsAnalytics'
+import { characterAliasIndex, normalizeCharacterName } from './characterNormalization'
 
 export interface StripboardStrip {
   id: string
@@ -141,10 +142,11 @@ const castForScene = (
   if (!sceneId) {
     return []
   }
+  const aliases = characterAliasIndex(project)
 
   return [...new Set([
     ...(buildSceneReport(project).find(scene => scene.sceneId === sceneId)?.castPresent ?? []),
-    ...project.production.breakdown.filter(entry => entry.kind === 'cast' && entry.sceneIds.includes(sceneId)).map(entry => entry.name),
+    ...project.production.breakdown.filter(entry => entry.kind === 'cast' && entry.sceneIds.includes(sceneId)).map(entry => { const name = normalizeCharacterName(entry.name); return aliases.get(name) ?? name }).filter(Boolean),
   ])].sort((left, right) => left.localeCompare(right))
 }
 

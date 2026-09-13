@@ -17,6 +17,11 @@ namcap PKGBUILD masterscript-bin-*.pkg.tar.zst
 pacman -U --noconfirm masterscript-bin-*.pkg.tar.zst
 test "$(masterscript-tui --version)" = "masterscript-tui $(sed -n 's/^pkgver=//p' PKGBUILD)"
 test -x /usr/bin/masterscript
+ldd /usr/bin/masterscript > /tmp/masterscript-libraries.txt
+if grep -q 'not found' /tmp/masterscript-libraries.txt; then
+  cat /tmp/masterscript-libraries.txt
+  exit 1
+fi
 desktop-file-validate /usr/share/applications/masterscript.desktop
 pacman -Qkk masterscript-bin
 pacman -R --noconfirm masterscript-bin

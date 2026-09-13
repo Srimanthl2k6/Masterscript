@@ -53,6 +53,7 @@ describe('canonical offline scene analysis', () => {
   it('uses aliases and distinguishes physical presence from references and dialogue', () => {
     const project = hospital()
     project.characters.profiles.RAVI = { name: 'RAVI', aliases: ['RAV'], bio: '', notes: '', customFields: [], imageDataUrl: '' }
+    project.production.breakdown.push({ id: 'legacy-rav', kind: 'cast', name: 'Rav', sceneIds: [], notes: '' })
     project.blocks[1].text = 'Rav sits beside Maya. MAYA watches Rav. JOHN opens the CAR door.'
     expect(analyzeProjectScenes(project)[0].cast).toEqual(['JOHN', 'MAYA', 'RAVI'])
     const other = hospital()
