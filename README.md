@@ -75,7 +75,7 @@ Save replaces the project atomically. A separate recovery copy is written every 
 
 Desktop checks about five seconds after startup, every six hours, and after connectivity returns. Standalone installs download signed updates in the background. Installation waits until the workspace is hidden or at Home, collaboration is offline, and input has been idle for two minutes. Input is then frozen and autosave, the opened file and recovery snapshot must save successfully. Failures defer installation and retry with backoff.
 
-Linux AppImages use this updater. Other Linux installs receive package-manager guidance and never self-replace package-owned files. Windows/macOS standalone installs use Tauri's signed installer flow. Package-manager detection on those two platforms is not implemented.
+Linux AppImages use this updater after verifying the executable is inside the AppImage runtime directory. Other Linux installs receive package-manager guidance. Windows/macOS standalone installs use Tauri's signed installer flow. Common Scoop, Chocolatey, WinGet portable, WindowsApps, Homebrew, MacPorts and Nix installation paths defer to their package manager; symlinks are resolved before detection. Custom manager layouts that install into ordinary standalone paths may not be identifiable.
 
 ## Development and release
 

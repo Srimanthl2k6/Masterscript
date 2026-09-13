@@ -1,5 +1,8 @@
 use serde::Serialize;
 
+#[path = "installation_method.rs"]
+mod installation_method;
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdatePolicy {
@@ -9,26 +12,19 @@ pub struct UpdatePolicy {
 
 #[tauri::command]
 pub fn installation_update_policy() -> UpdatePolicy {
-    #[cfg(target_os = "linux")]
-    {
-        if std::env::var_os("APPIMAGE").is_some() {
-            return UpdatePolicy {
-                managed: false,
-                method: "appimage",
-            };
-        }
-        // Only AppImage supports the Linux Tauri self-updater. System binaries,
-        // including deb/rpm/pacman and unknown launchers, use their package path.
-        UpdatePolicy {
-            managed: true,
-            method: "system-package",
-        }
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        UpdatePolicy {
-            managed: false,
-            method: "standalone",
-        }
-    }
+    let executable = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.canonicalize().ok());
+    let directory = std::env::var_os("APPDIR").and_then(|path| std::fs::canonicalize(path).ok());
+    let image_exists = std::env::var_os("APPIMAGE").is_some_and(|path| {
+        let path = std::path::Path::new(&path);
+        path.is_absolute() && path.is_file()
+    });
+    let (managed, method) = installation_method::detect_installation(
+        std::env::consts::OS,
+        executable.as_deref().and_then(|path| path.to_str()),
+        directory.as_deref().and_then(|path| path.to_str()),
+        image_exists,
+    );
+    UpdatePolicy { managed, method }
 }
