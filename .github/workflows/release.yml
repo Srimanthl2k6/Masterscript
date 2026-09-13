@@ -125,7 +125,7 @@ jobs:
           cp "$DMG_PATH" "release-assets/MasterScript.mac.$VERSION.universal.dmg"
           cp "$DMG_PATH" release-assets/MasterScript.mac.universal.dmg
           cp tui/dist/masterscript-tui "release-assets/masterscript-tui.$VERSION.macos.universal"
-          lipo -verify_arch x86_64 arm64 tui/dist/masterscript-tui
+          lipo tui/dist/masterscript-tui -verify_arch x86_64 arm64
           node scripts/release/asset-contract.mjs release-assets macOS
           (
             cd release-assets
