@@ -427,6 +427,12 @@ jobs:
       - name: Verify all download aliases and updater targets
         run: node scripts/release/verify-assets.mjs signed-assets
 
+      - name: Verify updater signatures against the app public key
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y minisign
+          node scripts/release/verify-signatures.mjs signed-assets
+
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}

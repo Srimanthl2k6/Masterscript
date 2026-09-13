@@ -54,6 +54,8 @@ describe('Tauri release workflows', () => {
     expect(benchmarkRunner).toContain('if ($LASTEXITCODE -ne 0) { throw')
     expect(releaseWorkflow).not.toContain('electron-builder')
     expect(releaseWorkflow).toContain('verify-assets.mjs signed-assets')
+    expect(releaseWorkflow.indexOf('verify-signatures.mjs signed-assets')).toBeLessThan(releaseWorkflow.indexOf('Create draft release'))
+    expect(releaseWorkflow).toContain('node scripts/release/verify-signatures.mjs signed-assets')
     expect(releaseWorkflow).toContain('generate-aur.mjs')
     expect(releaseWorkflow).toContain('npm run build:tui')
     expect(releaseWorkflow.toLowerCase()).not.toContain('security hardening release')
