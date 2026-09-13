@@ -144,6 +144,8 @@ jobs:
       - name: Enforce Windows RAM and installed-footprint thresholds
         if: matrix.platform == 'windows'
         shell: pwsh
+        env:
+          TAURI_DEBUG_TARGET_TIMEOUT_MS: 180000
         run: |
           $executable = (Resolve-Path 'src-tauri\target\release\masterscript.exe').Path
           $installer = (Get-ChildItem 'src-tauri\target\release\bundle\nsis\*.exe' | Select-Object -First 1).FullName
