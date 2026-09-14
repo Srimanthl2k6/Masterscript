@@ -26,8 +26,16 @@ interface CdpResponse {
   error?: { message: string }
 }
 
+const parsedDebugTargetTimeoutMs = Number(
+  process.env.TAURI_DEBUG_TARGET_TIMEOUT_MS ?? '90000',
+)
+const debugTargetTimeoutMs =
+  Number.isFinite(parsedDebugTargetTimeoutMs) && parsedDebugTargetTimeoutMs > 0
+    ? parsedDebugTargetTimeoutMs
+    : 90_000
+
 const waitForDebugTarget = async (app: ChildProcess) => {
-  const deadline = Date.now() + 30_000
+  const deadline = Date.now() + debugTargetTimeoutMs
   let lastError = 'No page target returned'
   while (Date.now() < deadline) {
     if (app.exitCode !== null || app.signalCode !== null) {
@@ -37,6 +45,7 @@ const waitForDebugTarget = async (app: ChildProcess) => {
       const response = await fetch(`http://127.0.0.1:${debuggingPort}/json/list`, {
         signal: AbortSignal.timeout(2_000),
       })
+      if (!response.ok) throw new Error(`Debug endpoint returned HTTP ${response.status}`)
       const targets = (await response.json()) as Array<{
         type: string
         webSocketDebuggerUrl: string

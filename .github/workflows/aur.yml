@@ -41,9 +41,9 @@ jobs:
         run: |
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           test "$(gh release view "$TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft)" = false
-          gh release download "$TAG" --repo "$REPOSITORY" --dir metadata --pattern PKGBUILD --pattern .SRCINFO --pattern release-checksums.sha256
+          gh release download "$TAG" --repo "$REPOSITORY" --dir metadata --pattern PKGBUILD --pattern masterscript-bin.SRCINFO --pattern release-checksums.sha256
           cd metadata
-          grep -E ' (\*|\./)?(PKGBUILD|\.SRCINFO)$' release-checksums.sha256 | sha256sum --check --strict
+          grep -E ' (\*|\./)?(PKGBUILD|masterscript-bin\.SRCINFO)$' release-checksums.sha256 | sha256sum --check --strict
       - name: Publish masterscript-bin
         if: steps.credentials.outputs.available == 'true'
         env:
@@ -56,7 +56,8 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$AUR_KNOWN_HOSTS" > ~/.ssh/known_hosts
           git clone ssh://aur@aur.archlinux.org/masterscript-bin.git aur
-          cp metadata/PKGBUILD metadata/.SRCINFO aur/
+          cp metadata/PKGBUILD aur/PKGBUILD
+          cp metadata/masterscript-bin.SRCINFO aur/.SRCINFO
           cd aur
           git config user.name 'MasterScript Releases'
           git config user.email 'masterscript@users.noreply.github.com'

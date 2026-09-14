@@ -1,6 +1,8 @@
 `masterscript-bin` is prepared from each release's actual Arch archive by
 `node scripts/release/generate-aur.mjs VERSION ARCHIVE OUTPUT`.
-The release contains its exact `PKGBUILD` and `.SRCINFO`, including a real SHA-256.
+The release's `masterscript-aur.tar.gz` contains its exact `PKGBUILD` and
+`.SRCINFO`, including a real SHA-256. The separate `masterscript-bin.SRCINFO`
+asset has identical contents; rename it to `.SRCINFO` when downloading it alone.
 Never substitute `SKIP` for a release checksum.
 
 The `Publish AUR package` workflow requires `AUR_SSH_PRIVATE_KEY` for an account

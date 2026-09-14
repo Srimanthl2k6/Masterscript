@@ -38,7 +38,7 @@ Make the Linux AppImage executable before launching, or install the native packa
 sudo pacman -U MasterScript.linux.x86_64.pkg.tar.zst
 ```
 
-Every release includes a `masterscript-bin` PKGBUILD and .SRCINFO generated from the actual versioned archive and SHA-256 checksum. Download the recipe into an empty directory, inspect it, then run `makepkg -si`. CI compares generated .SRCINFO and installs both the recipe-built and direct packages with pacman.
+Every release includes `masterscript-aur.tar.gz` containing the `masterscript-bin` PKGBUILD and .SRCINFO generated from the actual versioned archive and SHA-256 checksum. Extract the recipe into an empty directory, inspect it, then run `makepkg -si`. A separate `masterscript-bin.SRCINFO` asset has the same contents; GitHub renames leading-dot asset names. CI compares generated .SRCINFO and installs both the recipe-built and direct packages with pacman.
 
 **AUR publication is not yet configured.** Do not assume `yay -S masterscript-bin` exists. Configure repository environment `aur-publishing` secrets `AUR_SSH_PRIVATE_KEY` (an authorized AUR maintainer key) and `AUR_KNOWN_HOSTS` (the verified pinned SSH host entry). The [AUR workflow](.github/workflows/aur.yml) then publishes after verified releases. See [packaging/aur](packaging/aur/README.md).
 

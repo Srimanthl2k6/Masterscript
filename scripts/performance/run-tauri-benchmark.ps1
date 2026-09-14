@@ -15,6 +15,7 @@ $restorations = @()
 try {
   $env:WEBVIEW2_USER_DATA_FOLDER = $profileDirectory
   if ($elevated) {
+    Write-Host "Using temporary HKLM WebView2 policy for elevated benchmark: $applicationName"
     # WebView2 150+ ignores environment overrides in elevated hosts (including
     # GitHub's Windows runners). Scope temporary policy to this executable only.
     # https://github.com/MicrosoftEdge/WebView2Feedback/issues/5645#issuecomment-4934355430
@@ -38,6 +39,7 @@ try {
       New-ItemProperty -LiteralPath $policyPath -Name $applicationName -Value $setting.Value -PropertyType String -Force | Out-Null
     }
   }
+  Write-Host "WebView2 benchmark profile: $profileDirectory"
   npm run benchmark:tauri -- "--executable=$executablePath" "--installer=$Installer"
   if ($LASTEXITCODE -ne 0) { throw "Tauri benchmark failed with exit code $LASTEXITCODE" }
 } finally {

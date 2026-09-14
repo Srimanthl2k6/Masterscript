@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, basename } from 'node:path'
 import { manifest, namesForRelease } from './asset-contract.mjs'
@@ -6,7 +7,7 @@ import { manifest, namesForRelease } from './asset-contract.mjs'
 const directory = process.argv[2] ?? 'signed-assets'
 const { version } = JSON.parse(readFileSync('package.json', 'utf8'))
 const files = new Set(readdirSync(directory))
-const required = [...namesForRelease(version), 'MasterScript.app.tar.gz', 'MasterScript.app.tar.gz.sig', 'MasterScript.Setup.exe.sig', 'MasterScript.linux.x86_64.AppImage.sig', 'latest.json', 'PKGBUILD', '.SRCINFO', 'release-checksums.sha256']
+const required = [...namesForRelease(version), 'MasterScript.app.tar.gz', 'MasterScript.app.tar.gz.sig', 'MasterScript.Setup.exe.sig', 'MasterScript.linux.x86_64.AppImage.sig', 'latest.json', 'PKGBUILD', 'masterscript-bin.SRCINFO', 'masterscript-aur.tar.gz', 'release-checksums.sha256']
 for (const name of required) if (!files.has(name)) throw new Error(`Missing ${name}`)
 const digest = filename => createHash('sha256').update(readFileSync(join(directory, filename))).digest('hex')
 for (const artifact of manifest.artifacts) {
@@ -14,9 +15,13 @@ for (const artifact of manifest.artifacts) {
 }
 const archName = `MasterScript.linux.${version}.x86_64.pkg.tar.zst`
 const archHash = digest(archName)
-for (const filename of ['PKGBUILD', '.SRCINFO']) {
+for (const filename of ['PKGBUILD', 'masterscript-bin.SRCINFO']) {
   const metadata = readFileSync(join(directory, filename), 'utf8')
   if (!metadata.includes(archHash) || !metadata.includes(`/releases/download/v${version}/${archName}`) || metadata.includes("'SKIP'")) throw new Error(`Invalid AUR source/checksum: ${filename}`)
+}
+for (const [entry, filename] of [['PKGBUILD', 'PKGBUILD'], ['.SRCINFO', 'masterscript-bin.SRCINFO']]) {
+  const archived = execFileSync('tar', ['-xOzf', join(directory, 'masterscript-aur.tar.gz'), entry])
+  if (!archived.equals(readFileSync(join(directory, filename)))) throw new Error(`AUR archive differs from published metadata: ${entry}`)
 }
 const latest = JSON.parse(readFileSync(join(directory, 'latest.json'), 'utf8'))
 if (latest.version !== version) throw new Error('Updater version mismatch')

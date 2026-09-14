@@ -183,6 +183,8 @@ jobs:
           cp tui/dist/masterscript-tui "release-assets/masterscript-tui.$VERSION.linux.x86_64"
           node scripts/release/asset-contract.mjs release-assets Linux
           node scripts/release/generate-aur.mjs "$VERSION" "release-assets/MasterScript.linux.$VERSION.x86_64.pkg.tar.zst" release-assets
+          cp release-assets/.SRCINFO release-assets/masterscript-bin.SRCINFO
+          tar -czf release-assets/masterscript-aur.tar.gz -C release-assets PKGBUILD .SRCINFO
           dpkg-deb --info "$DEB"
           dpkg-deb --contents "$DEB" | grep 'usr/bin/masterscript-tui'
           rpm -qpl "$RPM" | grep 'usr/bin/masterscript-tui'
@@ -293,7 +295,7 @@ jobs:
         run: |
           VERSION="${TAG#v}"
           mkdir signed-assets
-          cp unsigned-assets/MasterScript* unsigned-assets/masterscript-tui* unsigned-assets/PKGBUILD unsigned-assets/.SRCINFO signed-assets/
+          cp unsigned-assets/MasterScript* unsigned-assets/masterscript-* unsigned-assets/PKGBUILD signed-assets/
           cp unsigned-assets/tauri-runtime-result.json signed-assets/
           cp "unsigned-assets/MasterScript.Setup.$VERSION.exe.sig" signed-assets/MasterScript.Setup.exe.sig
           cp "unsigned-assets/MasterScript.linux.$VERSION.x86_64.AppImage.sig" \
@@ -436,7 +438,7 @@ jobs:
         run: |
           if gh release view "$TAG" --repo "$REPOSITORY" >/dev/null 2>&1; then
             test "$(gh release view "$TAG" --repo "$REPOSITORY" --json isDraft --jq .isDraft)" = true
-            gh release edit "$TAG" --repo "$REPOSITORY" --notes-file "docs/releases/${TAG#v}.md"
+            gh release edit "$TAG" --repo "$REPOSITORY" --target "$GITHUB_SHA" --notes-file "docs/releases/${TAG#v}.md"
           else
           gh release create "$TAG" \
             --repo "$REPOSITORY" \
@@ -452,7 +454,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-        run: gh release upload "$TAG" signed-assets/* signed-assets/.SRCINFO --repo "$REPOSITORY" --clobber
+        run: |
+          # GitHub rewrites leading-dot asset names. Keep .SRCINFO inside the
+          # recipe archive and publish a named copy for the AUR workflow.
+          if gh release view "$TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq default.SRCINFO; then
+            gh release delete-asset "$TAG" default.SRCINFO --repo "$REPOSITORY" --yes
+          fi
+          gh release upload "$TAG" signed-assets/* --repo "$REPOSITORY" --clobber
 
       - name: Verify required release artifacts
         env:
