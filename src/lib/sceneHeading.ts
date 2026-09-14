@@ -78,7 +78,6 @@ export const parseSceneHeadingParts = (heading: string) => {
       )
     : withoutSceneNumber
   )
-    .split(/\s+-\s+/)[0]
     .replace(/[.\s]+$/, '')
     .trim()
 

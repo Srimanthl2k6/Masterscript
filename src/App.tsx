@@ -36,7 +36,8 @@ import {
   isTrustedCollaboration,
   rememberTrustedCollaboration,
 } from './lib/collaboration/trustedCollaboration'
-import { DESKTOP_DOWNLOAD_LINKS, shouldShowDownloadButton } from './lib/download'
+import { splitBlock } from './lib/splitBlock'
+import { useDesktopUpdater } from './lib/desktop/useDesktopUpdater'
 import { desktopBridge } from './lib/desktop/desktopBridge'
 import { buildMigrationManifestV1 } from './lib/desktop/migration'
 import { readRecentProjects, upsertRecentProject } from './lib/desktop/recentProjects'
@@ -160,8 +161,6 @@ import {
   buildBreakdownCsv,
   departmentTagCategories,
   tagScriptSelection,
-  updateTagCatalogItem,
-  type AutoTagSuggestion,
 } from './lib/taggingBreakdown'
 import {
   addCoverageRecord,
@@ -1390,7 +1389,6 @@ function App({ initialInstallState = null }: AppProps) {
   const dirtyProjectVersionRef = useRef(1)
   const persistedProjectVersionRef = useRef(0)
   const persistenceInFlightRef = useRef<Promise<void> | null>(null)
-
   useEffect(() => {
     latestProjectRef.current = project
     latestSavedFileRef.current = savedFileRef
@@ -1488,6 +1486,8 @@ function App({ initialInstallState = null }: AppProps) {
     onLocalProjectUpdated: applyLocalCollaborationProject,
     autosaveProject: persistProjectImmediately,
   })
+
+  useDesktopUpdater(project, savedFileRef, appView, collaboration.status, setStatusMessage)
 
   const autoConnectCollaboration = useCallback(
     async (targetProject: ScriptProject, projectFileRef?: ProjectFileRef) => {
@@ -1694,12 +1694,23 @@ function App({ initialInstallState = null }: AppProps) {
   )
 
   const undo = () => {
-    setHistory(undoProjectHistory)
+    const next = undoProjectHistory(history)
+    const currentIndex = project.blocks.findIndex(block => block.id === selectedBlockId)
+    const target = next.present.blocks.find(block => block.id === selectedBlockId) ?? next.present.blocks[Math.max(0, currentIndex - 1)]
+    if (target) {
+      const caret = Math.min(target.text.length, project.blocks[Math.max(0, currentIndex - 1)]?.text.length ?? 0)
+      setSelectedBlockId(target.id)
+      queueFocus(target.id, { start: caret, end: caret })
+    }
+    setHistory(next)
     setStatusMessage('Undid latest change')
   }
 
   const redo = () => {
-    setHistory(redoProjectHistory)
+    const next = redoProjectHistory(history)
+    const target = next.present.blocks.find(block => !project.blocks.some(previous => previous.id === block.id)) ?? next.present.blocks.find(block => block.id === selectedBlockId)
+    if (target) { setSelectedBlockId(target.id); queueFocus(target.id, { start: 0, end: 0 }) }
+    setHistory(next)
     setStatusMessage('Redid change')
   }
 
@@ -2281,6 +2292,13 @@ function App({ initialInstallState = null }: AppProps) {
     blockId: string,
     blockType: BlockType,
   ) => {
+    if (event.nativeEvent.isComposing) return
+    if ((event.ctrlKey || event.metaKey) && ['z', 'y'].includes(event.key.toLowerCase())) {
+      event.preventDefault()
+      if (event.key.toLowerCase() === 'y' || event.shiftKey) redo()
+      else undo()
+      return
+    }
     const eventShortcut = shortcutFromKeyEvent(event)
     const formattingShortcut = formattingShortcuts.find(
       (item) =>
@@ -2368,6 +2386,8 @@ function App({ initialInstallState = null }: AppProps) {
         const target = project.blocks.find((block) => block.id === blockId)
         if (
           target &&
+          getBlockSelection(blockId).start === target.text.length &&
+          getBlockSelection(blockId).end === target.text.length &&
           shouldApplyAutofillSuggestionOnEnter(target, suggestion, {
             characterSuggestions: autofillCharacterSuggestions,
             exactCharacterSuggestions: autofillCharacterSuggestions,
@@ -2385,7 +2405,15 @@ function App({ initialInstallState = null }: AppProps) {
 
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
-      addBlockAfter(index, nextTypeForEnter(blockType))
+      const result = splitBlock(project, blockId, getBlockSelection(blockId))
+      if (result.blocked) {
+        setStatusMessage('Locked or omitted scene prevented split')
+        return
+      }
+      setSelectedBlockId(result.focusBlockId)
+      setActiveTextSelection(result.selection)
+      queueFocus(result.focusBlockId, result.selection)
+      commitReplacement(result.project, 'Split screenplay block')
     }
   }
 
@@ -3869,7 +3897,11 @@ function App({ initialInstallState = null }: AppProps) {
   const regenerateProductionBreakdown = () => {
     const generated = generateProductionBreakdown(project)
     commit((draft) => {
-      draft.production.breakdown = generated
+      for (const entry of generated) {
+        const existing = draft.production.breakdown.find(item => item.kind === entry.kind && item.name.trim().toUpperCase() === entry.name)
+        if (existing) existing.sceneIds = [...new Set([...existing.sceneIds, ...entry.sceneIds])]
+        else draft.production.breakdown.push(entry)
+      }
     }, `Generated ${generated.length} production breakdown entities`)
   }
 
@@ -4001,29 +4033,6 @@ function App({ initialInstallState = null }: AppProps) {
         label: phrase,
       }),
       `Tagged ${phrase} as ${selectedTagCategory}`,
-    )
-  }
-
-  const confirmAutoTag = (suggestion: AutoTagSuggestion) => {
-    applyTaggingProject(
-      tagScriptSelection(project, {
-        blockId: suggestion.blockId,
-        start: suggestion.start,
-        end: suggestion.end,
-        category: suggestion.category,
-        label: suggestion.text,
-      }),
-      `Tagged ${suggestion.text} as ${suggestion.category}`,
-    )
-  }
-
-  const updateTagCatalog = (
-    itemId: string,
-    updates: Parameters<typeof updateTagCatalogItem>[2],
-  ) => {
-    applyTaggingProject(
-      updateTagCatalogItem(project, itemId, updates),
-      'Updated tag catalog item',
     )
   }
 
@@ -5312,7 +5321,6 @@ function App({ initialInstallState = null }: AppProps) {
   }, [appView])
 
   const isRunningInDesktop = desktopBridge.runtime !== 'web'
-  const showDownloadButton = shouldShowDownloadButton(isRunningInDesktop)
   const rightOutlineTitle = activeTab === 'draft' ? 'Writer Panel' : 'Scene Outlines'
 
   return (
@@ -5321,27 +5329,13 @@ function App({ initialInstallState = null }: AppProps) {
         <section className="home-shell">
           <div className="home-card">
             <p className="home-eyebrow">MasterScript</p>
+            {!isRunningInDesktop && <a className="small-copy" href="#/">Back to MasterScript</a>}
             <h1>Welcome to your writing workspace</h1>
             <p>
               Start a new screenplay, open an existing project, or import a Fountain file.
             </p>
 
             <div className="home-actions" data-tutorial="home-actions">
-              {showDownloadButton && (
-                <div className="download-links" aria-label="Desktop app downloads">
-                  {DESKTOP_DOWNLOAD_LINKS.map((link) => (
-                    <a
-                      key={link.label}
-                      className="download-btn"
-                      href={link.url}
-                      rel="noopener noreferrer"
-                      target="_blank"
-                    >
-                      {link.label}
-                    </a>
-                  ))}
-                </div>
-              )}
               <button className="share-btn" onClick={createNewProject}>
                 New Project
               </button>
@@ -6379,13 +6373,13 @@ function App({ initialInstallState = null }: AppProps) {
               <BreakdownWorkspace
                 project={project}
                 selectedSceneId={resolvedSelectedSceneId}
+                onProjectChange={applyTaggingProject}
+                onSceneChange={setSelectedSceneId}
                 selectedTagCategory={selectedTagCategory}
                 tagPhrase={tagPhrase}
                 setSelectedTagCategory={setSelectedTagCategory}
                 setTagPhrase={setTagPhrase}
                 applyManualTag={applyManualTag}
-                confirmAutoTag={confirmAutoTag}
-                updateTagCatalog={updateTagCatalog}
                 exportBreakdownCsv={exportBreakdownCsv}
                 exportBreakdownPdf={exportBreakdownPdf}
               />

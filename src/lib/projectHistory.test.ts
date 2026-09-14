@@ -8,6 +8,18 @@ import {
 } from './projectHistory'
 
 describe('project patch history', () => {
+  it('preserves edited neighbours when undoing and redoing a structural splice', () => {
+    const project = createEmptyProject()
+    project.blocks.push({ ...project.blocks[0], id: 'suffix', text: 'Before suffix' })
+    const history = commitProjectHistory(createProjectHistory(project), draft => {
+      draft.blocks[0].text = 'After prefix'
+      draft.blocks[1].text = 'After suffix'
+      draft.blocks.splice(1, 0, { ...draft.blocks[0], id: 'inserted', text: 'Middle' })
+    }, 'Structural edit')
+    const undone = undoProjectHistory(history)
+    expect(undone.present.blocks).toEqual(project.blocks)
+    expect(redoProjectHistory(undone).present.blocks).toEqual(history.present.blocks)
+  })
   it('stores forward and inverse patches instead of complete projects', () => {
     const project = createEmptyProject()
     const history = commitProjectHistory(

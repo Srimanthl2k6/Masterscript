@@ -7,6 +7,7 @@ mod legacy;
 mod migration;
 mod models;
 mod persistence;
+mod update_policy;
 
 use commands::{
     bootstrap_installation, collaboration_lan_host, collaboration_lan_join,
@@ -40,6 +41,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            update_policy::installation_update_policy,
             project_autosave,
             project_read_autosave,
             project_read_recent_snapshots,

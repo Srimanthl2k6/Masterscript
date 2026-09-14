@@ -96,6 +96,20 @@ const collectPatches = (
       }
       const beforeEnd = before.length - suffixLength
       const afterEnd = after.length - suffixLength
+      // Matching IDs do not imply matching contents: a split edits the existing
+      // prefix block as well as inserting a new ID. Apply those edits before the splice.
+      for (let index = 0; index < prefixLength; index += 1) {
+        collectPatches(before[index], after[index], [...path, index], forward, inverse)
+      }
+      for (let offset = 0; offset < suffixLength; offset += 1) {
+        const beforeIndex = beforeEnd + offset
+        const afterIndex = afterEnd + offset
+        const suffixForward: ProjectPatch[] = []
+        const suffixInverse: ProjectPatch[] = []
+        collectPatches(before[beforeIndex], after[afterIndex], [], suffixForward, suffixInverse)
+        forward.push(...suffixForward.map(patch => ({ ...patch, path: [...path, beforeIndex, ...patch.path] })))
+        inverse.push(...suffixInverse.map(patch => ({ ...patch, path: [...path, beforeIndex, ...patch.path] })))
+      }
       forward.push({
         path,
         operation: 'splice',

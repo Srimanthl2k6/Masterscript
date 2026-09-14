@@ -1,0 +1,15 @@
+{
+  "repository": "Srimanthl2k6/Masterscript",
+  "aurPublished": false,
+  "artifacts": [
+    { "id": "windows", "platform": "Windows", "label": "Windows x64", "format": ".exe installer", "description": "Install MasterScript on Windows 10 or later.", "stable": "MasterScript.Setup.exe", "versioned": "MasterScript.Setup.{version}.exe", "recommended": true },
+    { "id": "macos", "platform": "macOS", "label": "macOS Universal", "format": ".dmg", "description": "One download for Apple silicon and Intel Macs.", "stable": "MasterScript.mac.universal.dmg", "versioned": "MasterScript.mac.{version}.universal.dmg", "recommended": true },
+    { "id": "appimage", "platform": "Linux", "label": "AppImage — x86_64", "format": ".AppImage", "description": "Portable Linux option. Make executable, then run.", "stable": "MasterScript.linux.x86_64.AppImage", "versioned": "MasterScript.linux.{version}.x86_64.AppImage", "recommended": true },
+    { "id": "deb", "platform": "Linux", "label": "Debian / Ubuntu — amd64", "format": ".deb", "description": "Install with your distribution’s package manager.", "stable": "MasterScript.linux.amd64.deb", "versioned": "MasterScript.linux.{version}.amd64.deb" },
+    { "id": "rpm", "platform": "Linux", "label": "Fedora / RHEL compatible — x86_64", "format": ".rpm", "description": "Requires WebKitGTK 4.1 and compatible system libraries.", "stable": "MasterScript.linux.x86_64.rpm", "versioned": "MasterScript.linux.{version}.x86_64.rpm" },
+    { "id": "arch", "platform": "Linux", "label": "Arch Linux — x86_64", "format": ".pkg.tar.zst", "description": "Install the downloaded package with sudo pacman -U.", "stable": "MasterScript.linux.x86_64.pkg.tar.zst", "versioned": "MasterScript.linux.{version}.x86_64.pkg.tar.zst" },
+    { "id": "tui-windows", "platform": "Terminal", "label": "Windows x64 terminal", "format": ".exe", "description": "Run masterscript-tui.exe in Windows Terminal or PowerShell.", "stable": "masterscript-tui.windows.x86_64.exe", "versioned": "masterscript-tui.{version}.windows.x86_64.exe" },
+    { "id": "tui-macos", "platform": "Terminal", "label": "macOS Universal terminal", "format": "executable", "description": "Apple silicon and Intel. Make executable, then run in Terminal.", "stable": "masterscript-tui.macos.universal", "versioned": "masterscript-tui.{version}.macos.universal" },
+    { "id": "tui-linux", "platform": "Terminal", "label": "Linux x86_64 terminal", "format": "executable", "description": "Make executable and run. Also included in Linux system packages.", "stable": "masterscript-tui.linux.x86_64", "versioned": "masterscript-tui.{version}.linux.x86_64" }
+  ]
+}

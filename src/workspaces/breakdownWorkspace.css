@@ -1,0 +1,21 @@
+.breakdown-workspace .tag-catalog-item {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(80px, 1fr);
+  gap: 12px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border-soft);
+}
+.breakdown-workspace .tag-catalog-item > .inline-actions,
+.breakdown-workspace .tag-catalog-item > label:nth-child(2),
+.breakdown-workspace .tag-catalog-item > label:nth-child(5),
+.breakdown-workspace .tag-catalog-item > details { grid-column: 1 / -1; }
+.breakdown-workspace .tag-catalog-item label,
+.breakdown-workspace .tag-catalog-item details { min-width: 0; }
+.breakdown-workspace .tag-catalog-item input,
+.breakdown-workspace .tag-catalog-item select { width: 100%; min-width: 0; }
+.breakdown-workspace button { border-radius: 6px; padding: 7px 10px; font-size: 12px; }
+.breakdown-workspace .inline-actions { flex-wrap: wrap; }
+.breakdown-workspace .tag-catalog-item .inline-actions small { margin-right: auto; color: var(--text-muted); }
+.breakdown-workspace details summary { cursor: pointer; font-size: 13px; }
+.breakdown-workspace details[open] > .inline-actions { margin: 12px 0; }
+.breakdown-workspace details .inline-actions span { overflow-wrap: anywhere; }

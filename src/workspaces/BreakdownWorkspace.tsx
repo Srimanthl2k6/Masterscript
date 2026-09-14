@@ -1,217 +1,95 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
-  autoTagScript,
-  buildBreakdownSheet,
-  buildTagCatalog,
-  departmentTagCategories,
-  departmentTagColors,
-  type AutoTagSuggestion,
+  addCatalogOccurrence, buildBreakdownSheet, createCatalogItem, departmentTagCategories,
+  removeTagCatalogItem, removeTagOccurrence, resolveTagging, restoreAutomaticBreakdown,
+  updateTagCatalogItem,
 } from '../lib/taggingBreakdown'
-import type {
-  DepartmentTagCategory,
-  ScriptProject,
-  TagCatalogItem,
-} from '../types/screenplay'
+import { extractScenes } from '../lib/screenplay'
+import { clearSceneAnalysisCache } from '../lib/sceneAnalysis'
+import type { DepartmentTagCategory, ScriptProject } from '../types/screenplay'
+import './breakdownWorkspace.css'
 
 interface BreakdownWorkspaceProps {
   project: ScriptProject
   selectedSceneId: string | null
+  onProjectChange: (project: ScriptProject, status: string) => void
+  onSceneChange: (sceneId: string) => void
+  exportBreakdownCsv: () => void
+  exportBreakdownPdf: () => Promise<void>
   selectedTagCategory: DepartmentTagCategory
   tagPhrase: string
   setSelectedTagCategory: (category: DepartmentTagCategory) => void
   setTagPhrase: (phrase: string) => void
   applyManualTag: () => void
-  confirmAutoTag: (suggestion: AutoTagSuggestion) => void
-  updateTagCatalog: (
-    itemId: string,
-    updates: Partial<
-      Pick<TagCatalogItem, 'cost' | 'notes' | 'imageDataUrl' | 'name'>
-    >,
-  ) => void
-  exportBreakdownCsv: () => void
-  exportBreakdownPdf: () => Promise<void>
 }
 
-const BreakdownWorkspace = ({
-  project,
-  selectedSceneId,
-  selectedTagCategory,
-  tagPhrase,
-  setSelectedTagCategory,
-  setTagPhrase,
-  applyManualTag,
-  confirmAutoTag,
-  updateTagCatalog,
-  exportBreakdownCsv,
-  exportBreakdownPdf,
-}: BreakdownWorkspaceProps) => {
-  const tagCatalogGroups = useMemo(() => buildTagCatalog(project), [project])
-  const autoTagSuggestions = useMemo(
-    () => autoTagScript(project).slice(0, 40),
-    [project],
-  )
-  const selectedBreakdownSheet = useMemo(
-    () => buildBreakdownSheet(project, selectedSceneId),
-    [project, selectedSceneId],
-  )
-
+const BreakdownWorkspace = ({ project, selectedSceneId, onProjectChange, onSceneChange, exportBreakdownCsv, exportBreakdownPdf, selectedTagCategory, tagPhrase, setSelectedTagCategory, setTagPhrase, applyManualTag }: BreakdownWorkspaceProps) => {
+  const [name, setName] = useState('')
+  const [category, setCategory] = useState<DepartmentTagCategory>('Props')
+  const [unassigned, setUnassigned] = useState(false)
+  const scenes = useMemo(() => extractScenes(project), [project])
+  const sceneId = unassigned ? null : selectedSceneId ?? scenes[0]?.blockId ?? null
+  const sheet = useMemo(() => buildBreakdownSheet(project, sceneId), [project, sceneId])
+  const tagging = useMemo(() => resolveTagging(project), [project])
+  const change = (next: ScriptProject, status = 'Updated breakdown') => onProjectChange(next, status)
   return (
-    <section className="module-layout module-surface tab-enter">
+    <section className="module-layout module-surface breakdown-workspace tab-enter">
       <div className="module-heading">
-        <h2>Tagging and Breakdown</h2>
+        <h2>Scene Breakdown</h2>
         <div className="inline-actions">
-          <button onClick={applyManualTag}>Apply Tag</button>
+          <button onClick={() => { clearSceneAnalysisCache(); change({ ...project }, 'Reanalysed screenplay; corrections preserved') }}>Reanalyse</button>
+          <button onClick={() => change(restoreAutomaticBreakdown(project), 'Restored rejected automatic items')}>Restore rejected items</button>
           <button onClick={exportBreakdownCsv}>Breakdown CSV</button>
           <button onClick={() => void exportBreakdownPdf()}>Breakdown PDF</button>
         </div>
       </div>
-
-      <div className="tagging-grid">
-        <section className="tagging-panel">
-          <div className="module-heading compact-heading">
-            <h2>Inline Tagging</h2>
-          </div>
-          <label>
-            <span>Category</span>
-            <select
-              value={selectedTagCategory}
-              onChange={(event) =>
-                setSelectedTagCategory(
-                  event.target.value as DepartmentTagCategory,
-                )
-              }
-            >
-              {departmentTagCategories.map((category) => (
-                <option key={category}>{category}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Selected Phrase</span>
-            <input
-              value={tagPhrase}
-              onChange={(event) => setTagPhrase(event.target.value)}
-              placeholder="Highlight in Draft or type phrase"
-            />
-          </label>
-          <div className="tag-swatch-row">
-            {departmentTagCategories.map((category) => (
-              <button
-                key={category}
-                className={category === selectedTagCategory ? 'active' : ''}
-                onClick={() => setSelectedTagCategory(category)}
-                style={{ borderColor: departmentTagColors[category] }}
-              >
-                <span style={{ background: departmentTagColors[category] }} />
-                {category}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="tagging-panel">
-          <div className="module-heading compact-heading">
-            <h2>Auto-Tag Suggestions</h2>
-          </div>
-          <div className="tag-suggestion-list">
-            {autoTagSuggestions.length === 0 && (
-              <p className="small-copy">No local suggestions found.</p>
-            )}
-            {autoTagSuggestions.map((suggestion) => (
-              <button
-                key={`${suggestion.blockId}-${suggestion.category}-${suggestion.start}`}
-                onClick={() => confirmAutoTag(suggestion)}
-                style={{ borderLeftColor: suggestion.color }}
-              >
-                <strong>{suggestion.category}</strong>
-                <span>{suggestion.text}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="tagging-panel breakdown-sheet-panel">
-          <div className="module-heading compact-heading">
-            <h2>Scene Breakdown</h2>
-          </div>
-          <strong>{selectedBreakdownSheet.sceneHeading}</strong>
-          <div className="breakdown-category-list">
-            {departmentTagCategories.map((category) => {
-              const items = selectedBreakdownSheet.categories[category] ?? []
-              if (items.length === 0) {
-                return null
-              }
-
-              return (
-                <article key={category}>
-                  <h3>{category}</h3>
-                  {items.map((item) => (
-                    <span key={item.id}>
-                      {item.name} | {item.occurrences.length} occurrence(s)
-                    </span>
-                  ))}
-                </article>
-              )
-            })}
-          </div>
-        </section>
-      </div>
-
+      <p className="small-copy">A local first pass from your screenplay. Edit any item; your corrections and rejected items survive reanalysis.</p>
+      <details><summary>Tag a screenplay phrase</summary><div className="inline-actions">
+        <input aria-label="Selected phrase" value={tagPhrase} onChange={event => setTagPhrase(event.target.value)} />
+        <select aria-label="Phrase department" value={selectedTagCategory} onChange={event => setSelectedTagCategory(event.target.value as DepartmentTagCategory)}>{departmentTagCategories.map(category => <option key={category}>{category}</option>)}</select>
+        <button onClick={applyManualTag}>Apply Tag</button>
+      </div></details>
+      <label>Scene
+        <select value={sceneId ?? ''} onChange={event => { setUnassigned(!event.target.value); if (event.target.value) onSceneChange(event.target.value) }}>
+          <option value="">Unassigned items</option>
+          {scenes.map((scene, index) => <option key={scene.blockId} value={scene.blockId}>{index + 1}. {scene.heading}</option>)}
+        </select>
+      </label>
+      <form className="inline-actions" onSubmit={event => { event.preventDefault(); change(createCatalogItem(project, category, name, sceneId), 'Added breakdown item'); setName('') }}>
+        <input aria-label="New breakdown item" placeholder="Add an item to this scene" value={name} onChange={event => setName(event.target.value)} />
+        <select aria-label="New item department" value={category} onChange={event => setCategory(event.target.value as DepartmentTagCategory)}>{departmentTagCategories.map(category => <option key={category}>{category}</option>)}</select>
+        <button disabled={!name.trim()}>Add item</button>
+      </form>
       <div className="tag-catalog-grid">
-        {departmentTagCategories.map((category) => {
-          const items = tagCatalogGroups[category] ?? []
-          if (items.length === 0) {
-            return null
-          }
-
-          return (
-            <section className="tagging-panel" key={category}>
-              <div className="module-heading compact-heading">
-                <h2>{category}</h2>
+        {departmentTagCategories.map(category => {
+          const items = sheet.categories[category] ?? []
+          if (!items.length) return null
+          return <section className="tagging-panel" key={category}>
+            <h3>{category} <small>({items.length})</small></h3>
+            {items.map(item => <article className="tag-catalog-item" key={item.id}>
+              <div className="inline-actions"><small>{item.source ?? 'manual'} · {item.occurrences.length} occurrence(s)</small>
+                {item.source === 'automatic' && <button onClick={() => change(updateTagCatalogItem(project, item.id, { source: 'confirmed' }))}>Confirm</button>}
+                <button onClick={() => change(removeTagCatalogItem(project, item.id), 'Removed item; automatic inference suppressed')}>{item.source === 'automatic' ? 'Reject' : 'Delete'}</button>
               </div>
-              {items.map((item) => (
-                <article className="tag-catalog-item" key={item.id}>
-                  <input
-                    value={item.name}
-                    onChange={(event) =>
-                      updateTagCatalog(item.id, { name: event.target.value })
-                    }
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    value={item.cost}
-                    onChange={(event) =>
-                      updateTagCatalog(item.id, {
-                        cost: Number(event.target.value) || 0,
-                      })
-                    }
-                    placeholder="Cost"
-                  />
-                  <input
-                    value={item.notes}
-                    onChange={(event) =>
-                      updateTagCatalog(item.id, { notes: event.target.value })
-                    }
-                    placeholder="Notes"
-                  />
-                  <input
-                    value={item.imageDataUrl}
-                    onChange={(event) =>
-                      updateTagCatalog(item.id, {
-                        imageDataUrl: event.target.value,
-                      })
-                    }
-                    placeholder="Image data URL or reference"
-                  />
-                </article>
-              ))}
-            </section>
-          )
+              <label>Item<input value={item.name} onChange={event => change(updateTagCatalogItem(project, item.id, { name: event.target.value }))} /></label>
+              <label>Department<select value={item.category} onChange={event => change(updateTagCatalogItem(project, item.id, { category: event.target.value as DepartmentTagCategory }))}>{departmentTagCategories.map(category => <option key={category}>{category}</option>)}</select></label>
+              <label>Cost<input type="number" min={0} value={item.cost} onChange={event => change(updateTagCatalogItem(project, item.id, { cost: Number(event.target.value) || 0 }))} /></label>
+              <label>Notes<input value={item.notes} onChange={event => change(updateTagCatalogItem(project, item.id, { notes: event.target.value }))} /></label>
+              <details><summary>Scenes and occurrences</summary>
+                {tagging.tags.filter(tag => tag.catalogItemId === item.id).map(tag => <div className="inline-actions" key={tag.id}>
+                  <span>{scenes.find(scene => scene.blockId === tag.sceneId)?.heading ?? 'Unassigned'}{tag.quantity ? ` · approx. ${tag.quantity}` : ''}</span>
+                  <button aria-label={`Remove occurrence of ${item.name}`} onClick={() => change(removeTagOccurrence(project, tag.id))}>Remove</button>
+                </div>)}
+                <label>Add occurrence in scene<select value="" onChange={event => { if (event.target.value) change(addCatalogOccurrence(project, item.id, event.target.value)) }}>
+                  <option value="">Choose scene…</option>{scenes.map(scene => <option key={scene.blockId} value={scene.blockId}>{scene.heading}</option>)}
+                </select></label>
+              </details>
+            </article>)}
+          </section>
         })}
       </div>
+      {!Object.keys(sheet.categories).length && <p className="small-copy">No production elements in this scene yet. Add an item above or write a scene to begin.</p>}
     </section>
   )
 }
-
 export default BreakdownWorkspace

@@ -139,6 +139,7 @@ export interface CharacterCustomField {
 
 export interface CharacterProfile {
   name: string
+  aliases?: string[]
   bio: string
   notes: string
   imageDataUrl: string
@@ -295,6 +296,11 @@ export interface TaggedScriptRange {
   end: number
   color: string
   catalogItemId: string
+  source?: 'automatic' | 'manual' | 'confirmed' | 'edited'
+  inferenceKey?: string
+  confidence?: number
+  evidence?: string
+  quantity?: number
 }
 
 export interface TagCatalogItem {
@@ -304,11 +310,15 @@ export interface TagCatalogItem {
   cost: number
   notes: string
   imageDataUrl: string
+  source?: 'automatic' | 'manual' | 'confirmed' | 'edited'
+  inferenceKey?: string
 }
 
 export interface TaggingState {
   tags: TaggedScriptRange[]
   catalog: TagCatalogItem[]
+  rejectedItems?: string[]
+  rejectedOccurrences?: string[]
 }
 
 export type ScriptFormatId =

@@ -1,5 +1,6 @@
 fn main() {
     const COMMANDS: &[&str] = &[
+        "installation_update_policy",
         "project_autosave",
         "project_read_autosave",
         "project_read_recent_snapshots",

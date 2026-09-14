@@ -47,14 +47,17 @@ describe('Tauri release workflows', () => {
     expect(releaseWorkflow).toContain('MasterScript.Setup.exe')
     expect(releaseWorkflow).toContain('MasterScript.mac.universal.dmg')
     expect(releaseWorkflow).toContain('MasterScript.linux.x86_64.AppImage')
-    expect(releaseWorkflow).toContain('if [ -f signed-assets/.SRCINFO ]; then')
     const benchmarkRunner = readFileSync('scripts/performance/run-tauri-benchmark.ps1', 'utf8')
     expect(releaseWorkflow).toContain('run-tauri-benchmark.ps1 -Executable $executable -Installer $installer')
     expect(workflow).toContain('run-tauri-benchmark.ps1 -Executable $executable -Installer $installer')
     expect(benchmarkRunner).toContain('npm run benchmark:tauri')
     expect(benchmarkRunner).toContain('if ($LASTEXITCODE -ne 0) { throw')
     expect(releaseWorkflow).not.toContain('electron-builder')
-    expect(releaseWorkflow).toContain('exports editable alphanumeric scene numbers')
+    expect(releaseWorkflow).toContain('verify-assets.mjs signed-assets')
+    expect(releaseWorkflow.indexOf('verify-signatures.mjs signed-assets')).toBeLessThan(releaseWorkflow.indexOf('Create draft release'))
+    expect(releaseWorkflow).toContain('node scripts/release/verify-signatures.mjs signed-assets')
+    expect(releaseWorkflow).toContain('generate-aur.mjs')
+    expect(releaseWorkflow).toContain('npm run build:tui')
     expect(releaseWorkflow.toLowerCase()).not.toContain('security hardening release')
   })
 
@@ -74,6 +77,7 @@ describe('Tauri release workflows', () => {
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter((line) => line.startsWith('uses: '))
+        .filter((line) => !line.startsWith('uses: ./'))
 
       expect(actionUses.length).toBeGreaterThan(0)
       for (const use of actionUses) {

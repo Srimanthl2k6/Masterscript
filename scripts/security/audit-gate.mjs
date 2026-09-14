@@ -39,12 +39,13 @@ const npmFindings = Object.entries(npmReport.vulnerabilities ?? {})
     ids: advisoryIds(finding),
   }))
 
-const cargoReport = runJsonCommand('cargo', [
-  'audit',
-  '--json',
-  '--file',
-  'src-tauri/Cargo.lock',
-])
+const cargoReports = ['src-tauri/Cargo.lock', 'tui/Cargo.lock'].map(file =>
+  runJsonCommand('cargo', ['audit', '--json', '--file', file]),
+)
+const cargoReport = {
+  vulnerabilities: { list: cargoReports.flatMap(report => report.vulnerabilities?.list ?? []) },
+  warnings: { unsound: cargoReports.flatMap(report => report.warnings?.unsound ?? []) },
+}
 const cargoFindings = (cargoReport.vulnerabilities?.list ?? []).map(
   (finding) => ({
     source: 'RustSec',

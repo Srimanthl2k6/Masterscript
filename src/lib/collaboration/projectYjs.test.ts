@@ -8,8 +8,22 @@ import {
   yDocToScriptProject,
 } from './projectYjs'
 import { createBlock, createEmptyProject, createRevisionSnapshot } from '../screenplay'
+import { splitBlock } from '../splitBlock'
 
 describe('project Yjs conversion', () => {
+  it('splits without replacing unaffected collaborative text anchors', () => {
+    const project = createEmptyProject()
+    project.blocks = [createBlock('action', 'Hello world'), createBlock('action', 'Other text')]
+    const doc = scriptProjectToYDoc(project)
+    const original = findBlockMap(doc, project.blocks[0].id)
+    const unaffected = findBlockMap(doc, project.blocks[1].id)
+    const next = splitBlock(project, project.blocks[0].id, { start: 5, end: 5 }).project
+    applyProjectToYDoc(doc, next)
+    expect(findBlockMap(doc, project.blocks[0].id)).toBe(original)
+    expect(findBlockMap(doc, project.blocks[1].id)).toBe(unaffected)
+    expect(yDocToScriptProject(doc).blocks.map(block => block.text)).toEqual(['Hello', 'world', 'Other text'])
+    doc.destroy()
+  })
   it('round-trips an empty project through a structured Yjs document', () => {
     const project = createEmptyProject()
     const ydoc = scriptProjectToYDoc(project)

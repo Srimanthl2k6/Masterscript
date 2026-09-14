@@ -1,0 +1,7 @@
+UNLICENSED
+
+MasterScript's upstream package.json and src-tauri/Cargo.toml declare the
+project's license as UNLICENSED. This notice records that existing declaration;
+it does not grant additional permissions.
+
+Upstream: https://github.com/Srimanthl2k6/Masterscript

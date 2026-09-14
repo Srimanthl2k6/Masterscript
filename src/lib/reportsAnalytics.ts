@@ -1,10 +1,11 @@
 import type {
   DepartmentTagCategory,
-  ScriptBlock,
   ScriptProject,
 } from '../types/screenplay'
 import { extractScenes, getScriptStats, normalizeCharacterName } from './screenplay'
-import { parseSceneHeadingParts } from './sceneHeading'
+import { analyzeProjectScenes } from './sceneAnalysis'
+import { resolveTagging } from './taggingBreakdown'
+import { characterAliasIndex } from './characterNormalization'
 
 export interface SceneReportRow {
   sceneNumber: number
@@ -14,6 +15,10 @@ export interface SceneReportRow {
   dayNight: string
   castPresent: string[]
   pageCount: number
+  sceneLabel: string
+  location: string
+  nonSpeakingCast: string[]
+  requirements: Partial<Record<DepartmentTagCategory, string[]>>
 }
 
 export interface CharacterReportRow {
@@ -38,6 +43,8 @@ export interface DepartmentReportRow {
   scenes: string[]
   cost: number
   notes: string
+  occurrences: number
+  source: string
 }
 
 export interface DialogueReportRow {
@@ -79,80 +86,61 @@ export interface AnalyticsDashboard {
   sceneLengthHistogram: SceneLengthDatum[]
 }
 
-const wordsPerPage = 250
-
 const countWords = (text: string): number =>
   text
     .trim()
     .split(/\s+/)
     .filter(Boolean).length
 
-const sceneParts = (heading: string) => {
-  const parts = parseSceneHeadingParts(heading)
-  return {
-    intExt: parts.intExt,
-    dayNight: parts.dayNight,
-    location: parts.location,
-  }
-}
-
-const sceneRanges = (project: ScriptProject) => {
-  const scenes = extractScenes(project)
-  return scenes.map((scene, index) => {
-    const nextScene = scenes[index + 1]
-    const startIndex = scene.index
-    const endIndex = nextScene?.index ?? project.blocks.length
-    return {
-      ...scene,
-      sceneNumber: index + 1,
-      blocks: project.blocks.slice(startIndex, endIndex),
-    }
-  })
-}
-
-const pageCountForBlocks = (blocks: ScriptBlock[]): number => {
-  const words = blocks.reduce((sum, block) => sum + countWords(block.text), 0)
-  return Math.max(1, Math.ceil(words / wordsPerPage))
-}
-
-const castForBlocks = (blocks: ScriptBlock[]): string[] =>
-  [...new Set(
-    blocks
-      .filter((block) => block.type === 'character')
-      .map((block) => normalizeCharacterName(block.text))
-      .filter(Boolean),
-  )].sort((left, right) => left.localeCompare(right))
-
 const percent = (value: number, total: number): number =>
   total <= 0 ? 0 : Number(((value / total) * 100).toFixed(2))
 
-export const buildSceneReport = (project: ScriptProject): SceneReportRow[] =>
-  sceneRanges(project).map((scene) => {
-    const parts = sceneParts(scene.heading)
+const sceneReportCache = new WeakMap<ScriptProject, SceneReportRow[]>()
+export const buildSceneReport = (project: ScriptProject): SceneReportRow[] => {
+  const cached = sceneReportCache.get(project)
+  if (cached) return cached
+  const tagging = resolveTagging(project)
+  const catalog = new Map(tagging.catalog.map(item => [item.id, item]))
+  const result = analyzeProjectScenes(project).map((scene) => {
+    const requirements: Partial<Record<DepartmentTagCategory, string[]>> = {}
+    for (const tag of tagging.tags.filter(tag => tag.sceneId === scene.sceneId)) {
+      const item = catalog.get(tag.catalogItemId)
+      if (!item) continue
+      const label = tag.quantity ? `${item.name} (approx. ${tag.quantity})` : item.name
+      requirements[item.category] = [...new Set([...(requirements[item.category] ?? []), label])].sort()
+    }
+    const castPresent = (requirements.Cast ?? []).map(normalizeCharacterName).sort()
     return {
       sceneNumber: scene.sceneNumber,
-      sceneId: scene.blockId,
+      sceneLabel: scene.sceneLabel,
+      sceneId: scene.sceneId,
       heading: scene.heading,
-      intExt: parts.intExt,
-      dayNight: parts.dayNight,
-      castPresent: castForBlocks(scene.blocks),
-      pageCount: pageCountForBlocks(scene.blocks),
+      location: scene.location,
+      intExt: scene.intExt,
+      dayNight: scene.dayNight,
+      castPresent,
+      nonSpeakingCast: castPresent.filter(name => !scene.speakingCast.includes(name)),
+      pageCount: scene.pageCount,
+      requirements,
     }
   })
+  sceneReportCache.set(project, result)
+  return result
+}
 
 export const buildCharacterReport = (project: ScriptProject): CharacterReportRow[] => {
-  const scenes = sceneRanges(project)
-  const totalPages = scenes.reduce((sum, scene) => sum + pageCountForBlocks(scene.blocks), 0)
+  const scenes = buildSceneReport(project)
+  const totalPages = scenes.reduce((sum, scene) => sum + scene.pageCount, 0)
   const stats = new Map<string, { scenes: Set<string>; pages: number }>()
 
   for (const scene of scenes) {
-    const scenePages = pageCountForBlocks(scene.blocks)
-    for (const character of castForBlocks(scene.blocks)) {
+    const scenePages = scene.pageCount
+    for (const character of scene.castPresent) {
       const entry = stats.get(character) ?? { scenes: new Set<string>(), pages: 0 }
-      if (!entry.scenes.has(scene.heading)) {
+      if (!entry.scenes.has(scene.sceneId)) {
         entry.pages += scenePages
       }
-      entry.scenes.add(scene.heading)
+      entry.scenes.add(scene.sceneId)
       stats.set(character, entry)
     }
   }
@@ -160,7 +148,7 @@ export const buildCharacterReport = (project: ScriptProject): CharacterReportRow
   return [...stats.entries()]
     .map(([character, entry]) => ({
       character,
-      scenes: [...entry.scenes],
+      scenes: [...entry.scenes].map(id => { const scene = scenes.find(scene => scene.sceneId === id)!; return `${scene.sceneLabel}. ${scene.heading}` }),
       sceneCount: entry.scenes.size,
       totalPages: entry.pages,
       screenTimePercent: percent(entry.pages, totalPages),
@@ -172,7 +160,7 @@ export const buildLocationReport = (project: ScriptProject): LocationReportRow[]
   const grouped = new Map<string, LocationReportRow>()
 
   for (const scene of buildSceneReport(project)) {
-    const parts = sceneParts(scene.heading)
+    const parts = scene
     const key = `${parts.location}|${parts.intExt}|${parts.dayNight}`
     const entry =
       grouped.get(key) ??
@@ -199,8 +187,9 @@ export const buildDepartmentReport = (
   const headings = new Map(extractScenes(project).map((scene) => [scene.blockId, scene.heading]))
   const grouped = new Map<string, DepartmentReportRow>()
 
-  for (const item of project.tagging.catalog.filter((entry) => entry.category === category)) {
-    const tags = project.tagging.tags.filter((tag) => tag.catalogItemId === item.id)
+  const tagging = resolveTagging(project)
+  for (const item of tagging.catalog.filter((entry) => entry.category === category)) {
+    const tags = tagging.tags.filter((tag) => tag.catalogItemId === item.id)
     grouped.set(item.id, {
       category,
       item: item.name,
@@ -213,6 +202,8 @@ export const buildDepartmentReport = (
       ],
       cost: item.cost,
       notes: item.notes,
+      occurrences: tags.length,
+      source: item.source ?? 'manual',
     })
   }
 
@@ -221,11 +212,16 @@ export const buildDepartmentReport = (
 
 export const buildDialogueReport = (project: ScriptProject): DialogueReportRow[] => {
   const stats = new Map<string, { lines: number; words: number }>()
+  const aliases = characterAliasIndex(project)
   let activeCharacter: string | null = null
 
+  let omittedScene = false
   for (const block of project.blocks) {
+    if (block.type === 'scene-heading') omittedScene = Boolean(block.omitted)
+    if (omittedScene || block.omitted) { activeCharacter = null; continue }
     if (block.type === 'character') {
-      activeCharacter = normalizeCharacterName(block.text) || null
+      const name = normalizeCharacterName(block.text)
+      activeCharacter = aliases.get(name) ?? (name || null)
       if (activeCharacter && !stats.has(activeCharacter)) {
         stats.set(activeCharacter, { lines: 0, words: 0 })
       }
@@ -238,6 +234,7 @@ export const buildDialogueReport = (project: ScriptProject): DialogueReportRow[]
       entry.words += countWords(block.text)
       stats.set(activeCharacter, entry)
     }
+    if (!['character', 'dialogue', 'parenthetical'].includes(block.type)) activeCharacter = null
   }
 
   const totalWords = [...stats.values()].reduce((sum, entry) => sum + entry.words, 0)
@@ -258,7 +255,7 @@ export const buildPageSceneSummary = (project: ScriptProject): PageSceneSummary 
     estimatedPages: stats.estimatedPages,
     dialogueLines: stats.dialogueLines,
     wordCount: stats.wordCount,
-    taggedItems: project.tagging.tags.length,
+    taggedItems: resolveTagging(project).tags.length,
   }
 }
 
@@ -270,8 +267,8 @@ export const buildAnalyticsDashboard = (project: ScriptProject): AnalyticsDashbo
   const intExtCounts = new Map<string, number>()
   const dayNightCounts = new Map<string, number>()
 
-  const sceneLengthHistogram = sceneRanges(project).map((scene) => {
-    const parts = sceneParts(scene.heading)
+  const sceneLengthHistogram = analyzeProjectScenes(project).filter(scene => scene.pageCount > 0).map((scene) => {
+    const parts = scene
     if (parts.intExt) {
       intExtCounts.set(parts.intExt, (intExtCounts.get(parts.intExt) ?? 0) + 1)
     }
@@ -279,12 +276,12 @@ export const buildAnalyticsDashboard = (project: ScriptProject): AnalyticsDashbo
       dayNightCounts.set(parts.dayNight, (dayNightCounts.get(parts.dayNight) ?? 0) + 1)
     }
 
-    const words = scene.blocks.reduce((sum, block) => sum + countWords(block.text), 0)
+    const words = scene.words
     return {
       sceneNumber: scene.sceneNumber,
       heading: scene.heading,
       words,
-      pages: Math.max(1, Math.ceil(words / wordsPerPage)),
+      pages: scene.pageCount,
     }
   })
 
