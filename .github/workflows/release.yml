@@ -388,7 +388,7 @@ jobs:
           )
 
       - name: Attest signed release provenance
-        uses: actions/attest-build-provenance@b3e506e8c389afc651c5bacf2b8f2a1ea0557215 # v4.1.0
+        uses: actions/attest-build-provenance@9d57eef8c06cd9d6b433effeeb7a6a77b3ff94ad # v4.1.0
         with:
           subject-path: signed-assets/*
 
