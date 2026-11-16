@@ -85,4 +85,4 @@ jobs:
           languages: javascript-typescript
 
       - name: Analyze JavaScript and TypeScript
-        uses: github/codeql-action/analyze@411bbbe57033eedfc1a82d68c01345aa96c737d7 # v4
+        uses: github/codeql-action/analyze@3ea37a44b6e4e6847c46edae209410d258d548d1 # v4
